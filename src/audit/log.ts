@@ -66,4 +66,32 @@ export class AuditLog {
     }
     return sum;
   }
+
+  /**
+   * Была ли идентичная заявка (тот же dedupKey) отправлена за последние
+   * `windowSec` секунд. Идемпотентность на уровне приложения — защита от
+   * дублей (рестарт/повтор), т.к. MCP invest_create_order не принимает
+   * ключ идемпотентности.
+   */
+  async recentlySent(dedupKey: string, windowSec: number): Promise<boolean> {
+    let raw: string;
+    try {
+      raw = await readFile(this.filePath, "utf8");
+    } catch {
+      return false;
+    }
+    const cutoff = Date.now() - windowSec * 1000;
+    for (const line of raw.split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        const ev = JSON.parse(line) as AuditEvent;
+        if (ev.type !== "execute") continue;
+        const p = ev.payload as { sent?: boolean; dedupKey?: string };
+        if (p?.sent && p.dedupKey === dedupKey && Date.parse(ev.at) >= cutoff) return true;
+      } catch {
+        // битую строку пропускаем
+      }
+    }
+    return false;
+  }
 }

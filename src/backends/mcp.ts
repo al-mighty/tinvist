@@ -111,6 +111,8 @@ export class McpBackend implements TradingBackend {
       args.price = { value: String(req.price) };
       args.priceType = "PRICE_TYPE_CURRENCY";
     }
+    // MCP invest_create_order НЕ принимает ключ идемпотентности (в отличие от
+    // REST) — защита от дублей на проде реализована app-дедупом в Executor.
     const res = await this.callOnce("invest_create_order", args);
     return {
       orderId: String(res?.orderId ?? res?.orderRequestId ?? ""),

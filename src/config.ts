@@ -70,6 +70,10 @@ const EnvSchema = z.object({
   LOOP_START_HOUR_MSK: z.coerce.number().int().default(10), // начало окна, МСК
   LOOP_END_HOUR_MSK: z.coerce.number().int().default(24), // конец окна, МСК (24 = включая вечёрку)
   LOOP_MAX_TICKS: z.coerce.number().int().default(0), // 0 = бесконечно (для тестов можно ограничить)
+  LOOP_JITTER_SEC: z.coerce.number().int().default(120), // случайный разброс тика (антипредсказуемость/гердинг)
+
+  // Идемпотентность/дедуп заявок (защита от дублей)
+  DEDUP_WINDOW_SEC: z.coerce.number().int().default(120), // блок идентичной заявки в этом окне
 
   // Подтверждение
   APPROVAL_CHANNEL: z.enum(["cli", "telegram"]).default("telegram"),

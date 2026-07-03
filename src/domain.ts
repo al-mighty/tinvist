@@ -42,6 +42,8 @@ export interface CreateOrderRequest {
   orderType: "market" | "limit" | "bestprice";
   /** Цена за единицу (для limit), в валюте инструмента. */
   price?: number;
+  /** Ключ идемпотентности (broker order_id, где поддерживается). */
+  idempotencyKey?: string;
 }
 
 export interface OrderResult {

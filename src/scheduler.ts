@@ -50,7 +50,12 @@ export async function runLoop(
       console.log(`Достигнут лимит тиков (${cfg.LOOP_MAX_TICKS}) — выход.`);
       break;
     }
-    await interruptibleSleep(cfg.LOOP_INTERVAL_SEC * 1000, () => stop);
+    // Джиттер: разброс интервала, чтобы не быть предсказуемым и не гердиться
+    // с другими ботами на одинаковых «ровных» тиках.
+    const jitterMs = Math.floor(Math.random() * cfg.LOOP_JITTER_SEC * 1000);
+    const sleepMs = cfg.LOOP_INTERVAL_SEC * 1000 + jitterMs;
+    console.log(`Следующий тик через ${Math.round(sleepMs / 1000)}с (базовый ${cfg.LOOP_INTERVAL_SEC} + джиттер ${Math.round(jitterMs / 1000)}).`);
+    await interruptibleSleep(sleepMs, () => stop);
   }
 }
 

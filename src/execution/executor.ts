@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Config } from "../config.js";
 import type { TradingBackend } from "../backends/types.js";
 import type { Approver } from "../approval/types.js";
@@ -65,11 +66,23 @@ export class Executor {
     }
 
     // 4. Отправка или dry-run.
+    const dedupKey = `${accountId}:${proposal.instrument}:${proposal.side}:${proposal.lots}`;
     if (!send) {
-      await this.audit.record("execute", { sent: false, mode: reason, notionalRub: notional });
+      await this.audit.record("execute", { sent: false, mode: reason, notionalRub: notional, dedupKey });
       return { status: "dry-run", message: `DRY-RUN (${reason}): заявка не отправлена.` };
     }
 
+    // Идемпотентность: не отправлять идентичную заявку повторно в коротком окне
+    // (защита от дублей при рестарте/повторе; MCP не даёт broker-ключа).
+    if (await this.audit.recentlySent(dedupKey, this.cfg.DEDUP_WINDOW_SEC)) {
+      await this.audit.record("execute", { sent: false, mode: "dedup-blocked", notionalRub: notional, dedupKey });
+      return {
+        status: "blocked",
+        message: `Дубль: идентичная заявка уже отправлена за последние ${this.cfg.DEDUP_WINDOW_SEC}с (idempotency).`,
+      };
+    }
+
+    const idempotencyKey = randomUUID();
     try {
       const order = await this.backend.createOrder({
         accountId,
@@ -78,8 +91,9 @@ export class Executor {
         side: proposal.side,
         orderType: proposal.orderType,
         price: proposal.orderType === "limit" ? proposal.price : undefined,
+        idempotencyKey,
       });
-      await this.audit.record("execute", { sent: true, mode: reason, notionalRub: notional });
+      await this.audit.record("execute", { sent: true, mode: reason, notionalRub: notional, dedupKey, idempotencyKey });
       await this.audit.record("result", { order });
       return { status: "executed", message: `Отправлено (${reason}): ${order.status}`, order };
     } catch (err) {

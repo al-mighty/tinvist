@@ -124,6 +124,8 @@ export class SandboxBackend implements TradingBackend {
     if (req.orderType === "limit" && req.price != null) {
       body.price = toQuotation(req.price);
     }
+    // REST SandboxService поддерживает orderId как ключ идемпотентности.
+    if (req.idempotencyKey) body.orderId = req.idempotencyKey;
     const res = await this.rpc("SandboxService", "PostSandboxOrder", body);
     return {
       orderId: String(res?.orderId ?? ""),
