@@ -192,6 +192,7 @@ BACKEND=prod  +  DRY_RUN=false  +  ALLOW_REAL_TRADING=true
 | **Гейт прибыльности** | Блокирует покупку, если её цель (тейк) не покрывает round-trip издержки: `targetPct ≥ (2·COMMISSION_PCT + SLIPPAGE_PCT)·MIN_NET_EDGE_RATIO`. Убивает убыточный по комиссии скальпинг |
 | **Лимитные заявки** (`USE_LIMIT_ORDERS`) | Marketable-limit по стакану: потолок цены = крайний уровень в пределах `LIMIT_SLIPPAGE_CAP_PCT` + FILL_AND_KILL. Заливается по лучшей цене, проскальзывание ограничено, не оставляет висящих заявок |
 | **Фильтр ликвидности** (`MAX_SPREAD_PCT`) | Не входит в бумаги со спредом шире порога (дорогое проскальзывание). Применяется к входам |
+| **Circuit breaker** (`VOLATILITY_ENABLED`, `MAX_INTRADAY_RANGE_PCT`) | Не входит при аномальном внутридневном размахе (флэшкрэш/каскад): размах (max high − min low)/last по 5-мин свечам за час выше порога → пропуск входа |
 
 **Сохранение капитала** (защита от разорения; применяется к покупкам,
 продажи-сокращение риска всегда разрешены):
@@ -241,6 +242,7 @@ BACKEND=prod  +  DRY_RUN=false  +  ALLOW_REAL_TRADING=true
 | `USE_LIMIT_ORDERS` | `true` | Marketable-limit вместо рыночных |
 | `LIMIT_SLIPPAGE_CAP_PCT` | `0.3` | Потолок проскальзывания лимитки, % |
 | `MAX_SPREAD_PCT` | `0.5` | Фильтр ликвидности: макс. спред для входа, % |
+| `VOLATILITY_ENABLED` / `MAX_INTRADAY_RANGE_PCT` | `true` / `3` | Circuit breaker: стоп входов при размахе за час выше % |
 | `DEDUP_WINDOW_SEC` | `120` | Окно дедупа идентичных заявок (идемпотентность) |
 | `LOOP_JITTER_SEC` | `120` | Случайный разброс тика планировщика |
 | `MAX_DRAWDOWN_PCT` | `15` | Kill-switch: стоп покупок при просадке от пика (0=выкл) |
