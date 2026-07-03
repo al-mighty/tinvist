@@ -8,6 +8,7 @@ import {
   type Position,
 } from "../domain.js";
 import { withRetry } from "../util/retry.js";
+import { tifEnum } from "./mcp.js";
 import type { TradingBackend } from "./types.js";
 
 const NS = "tinkoff.public.invest.api.contract.v1";
@@ -123,6 +124,7 @@ export class SandboxBackend implements TradingBackend {
     };
     if (req.orderType === "limit" && req.price != null) {
       body.price = toQuotation(req.price);
+      body.timeInForce = tifEnum(req.timeInForce);
     }
     // REST SandboxService поддерживает orderId как ключ идемпотентности.
     if (req.idempotencyKey) body.orderId = req.idempotencyKey;

@@ -16,6 +16,15 @@ import type { TradingBackend } from "./types.js";
  * Все денежные поля MCP приходят как { value: "decimal" } — парсим через
  * универсальный parseMoney.
  */
+/** "day"|"fak"|"fok" → enum T-Invest. */
+export function tifEnum(tif?: "day" | "fak" | "fok"): string {
+  return tif === "fak"
+    ? "TIME_IN_FORCE_FILL_AND_KILL"
+    : tif === "fok"
+      ? "TIME_IN_FORCE_FILL_OR_KILL"
+      : "TIME_IN_FORCE_DAY";
+}
+
 export class McpBackend implements TradingBackend {
   readonly kind = "prod" as const;
   private readonly mcp: TInvestMcp;
@@ -110,6 +119,7 @@ export class McpBackend implements TradingBackend {
     if (req.orderType === "limit" && req.price != null) {
       args.price = { value: String(req.price) };
       args.priceType = "PRICE_TYPE_CURRENCY";
+      args.timeInForce = tifEnum(req.timeInForce);
     }
     // MCP invest_create_order НЕ принимает ключ идемпотентности (в отличие от
     // REST) — защита от дублей на проде реализована app-дедупом в Executor.

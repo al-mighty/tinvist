@@ -24,6 +24,8 @@ export interface TradeProposal {
   lotSize?: number;
   /** Целевая прибыль сделки, % (тейк-профит). Нужна гейту прибыльности. */
   targetPct?: number;
+  /** Алгоритм исполнения limit-заявки (стратегия ставит fak для marketable-limit). */
+  timeInForce?: "day" | "fak" | "fok";
   /** Обоснование от стратегии/LLM — показывается при подтверждении. */
   rationale: string;
   /** Уверенность модели, 0..1 (если применимо). */

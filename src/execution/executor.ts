@@ -91,6 +91,7 @@ export class Executor {
         side: proposal.side,
         orderType: proposal.orderType,
         price: proposal.orderType === "limit" ? proposal.price : undefined,
+        timeInForce: proposal.timeInForce,
         idempotencyKey,
       });
       await this.audit.record("execute", { sent: true, mode: reason, notionalRub: notional, dedupKey, idempotencyKey });

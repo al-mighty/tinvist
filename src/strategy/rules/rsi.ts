@@ -1,7 +1,7 @@
 import type { Config } from "../../config.js";
 import type { TradingBackend } from "../../backends/types.js";
 import { InstrumentResolver } from "../../instruments/resolve.js";
-import { MarketData } from "../../instruments/marketdata.js";
+import { MarketData, limitPriceFromBook, type OrderbookSnapshot } from "../../instruments/marketdata.js";
 import type { ProposalResult } from "../engine.js";
 import type { TradeProposal } from "../types.js";
 
@@ -123,7 +123,8 @@ export class RsiStrategy {
         const lots = Math.floor(pos.quantity / info.lot);
         if (lots < 1) continue;
 
-        const price = await this.backend.getLastPrice(info.uid);
+        const book = await market.orderbook(info.uid).catch(() => null);
+        const price = book ? book.mid : await this.backend.getLastPrice(info.uid);
         const candles = await market.dailyCandles(info.uid, 45).catch(() => null);
         const rsi = candles ? computeRSI(candles.closes, this.p.period) : null;
         const rsiStr = rsi != null ? rsi.toFixed(1) : "n/a";
@@ -157,13 +158,15 @@ export class RsiStrategy {
         }
 
         if (reason) {
+          const exec = this.orderExec("sell", book, price);
           proposals.push({
             instrument: info.uid,
             instrumentName: `${info.ticker} · ${info.name}`,
             side: "sell",
-            orderType: "market",
+            orderType: exec.orderType,
             lots,
-            price,
+            price: exec.price,
+            timeInForce: exec.timeInForce,
             lotSize: info.lot,
             confidence: 0.8,
             rationale: reason,
@@ -183,8 +186,16 @@ export class RsiStrategy {
         }
         if (heldUids.has(info.uid)) continue; // уже в портфеле — управляется выходами
 
-        const price = await this.backend.getLastPrice(info.uid);
-        const notional = price * info.lot;
+        // Фильтр ликвидности: не входим в широкий спред (дорогое проскальзывание).
+        const book = await market.orderbook(info.uid).catch(() => null);
+        if (!book) {
+          notes.push(`${info.ticker}: нет стакана — пропуск`);
+          continue;
+        }
+        if (book.spreadPct > this.cfg.MAX_SPREAD_PCT) {
+          notes.push(`${info.ticker}: спред ${book.spreadPct.toFixed(2)}% > ${this.cfg.MAX_SPREAD_PCT}% — неликвидно, пропуск`);
+          continue;
+        }
 
         let rationale: string | null = null;
         let confidence = 0.6;
@@ -220,6 +231,8 @@ export class RsiStrategy {
           confidence = this.confidence(rsi, "buy");
         }
 
+        const exec = this.orderExec("buy", book, book.mid);
+        const notional = exec.price * info.lot;
         if (notional > this.cfg.MAX_ORDER_RUB) {
           notes.push(`${info.ticker}: сигнал, но лот ${notional.toFixed(0)}₽ > лимита`);
           continue;
@@ -233,9 +246,10 @@ export class RsiStrategy {
           instrument: info.uid,
           instrumentName: `${info.ticker} · ${info.name}`,
           side: "buy",
-          orderType: "market",
+          orderType: exec.orderType,
           lots: 1,
-          price,
+          price: exec.price,
+          timeInForce: exec.timeInForce,
           lotSize: info.lot,
           confidence,
           targetPct: this.p.takeProfitPct,
@@ -256,6 +270,23 @@ export class RsiStrategy {
       notes.join("; ");
 
     return { proposals, commentary };
+  }
+
+  /**
+   * Тип/цена/TIF заявки. При USE_LIMIT_ORDERS — marketable-limit по стакану в
+   * пределах кэпа проскальзывания + FILL_AND_KILL (не оставляет висящих заявок).
+   * Иначе — рыночная по референсной цене.
+   */
+  private orderExec(
+    side: "buy" | "sell",
+    book: OrderbookSnapshot | null,
+    refPrice: number,
+  ): { orderType: "market" | "limit"; price: number; timeInForce?: "day" | "fak" | "fok" } {
+    if (this.cfg.USE_LIMIT_ORDERS && book) {
+      const price = limitPriceFromBook(side, book, this.cfg.LIMIT_SLIPPAGE_CAP_PCT);
+      return { orderType: "limit", price, timeInForce: "fak" };
+    }
+    return { orderType: "market", price: refPrice };
   }
 
   /** Чем дальше RSI за порог, тем выше уверенность (0.5..0.9). */

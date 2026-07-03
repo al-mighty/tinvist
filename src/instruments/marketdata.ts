@@ -12,6 +12,50 @@ export interface UpcomingDividend {
   daysToPayment: number;
 }
 
+export interface OrderbookLevel {
+  price: number;
+  qty: number; // штук
+}
+
+export interface OrderbookSnapshot {
+  bids: OrderbookLevel[];
+  asks: OrderbookLevel[];
+  bestBid: number;
+  bestAsk: number;
+  mid: number;
+  spreadPct: number;
+}
+
+/**
+ * Marketable-limit цена = крайний уровень стакана в пределах кэпа проскальзывания.
+ * Лимит — это ПОТОЛОК цены, а не цена исполнения: заявка зальётся по лучшим
+ * ценам, но не хуже кэпа. Ставим на край кэпа (для buy выше ask, для sell ниже
+ * bid) — чтобы заявка оставалась маркетабельной при микро-движениях и всё же
+ * ограничивала проскальзывание. Цена берётся из реального стакана → тик-валидна.
+ */
+export function limitPriceFromBook(
+  side: "buy" | "sell",
+  book: OrderbookSnapshot,
+  capPct: number,
+): number {
+  if (side === "buy") {
+    const cap = book.bestAsk * (1 + capPct / 100);
+    let px = book.bestAsk;
+    for (const lvl of book.asks) {
+      if (lvl.price > cap) break;
+      px = lvl.price; // самый высокий ask в пределах кэпа
+    }
+    return px;
+  }
+  const cap = book.bestBid * (1 - capPct / 100);
+  let px = book.bestBid;
+  for (const lvl of book.bids) {
+    if (lvl.price < cap) break;
+    px = lvl.price; // самый низкий bid в пределах кэпа
+  }
+  return px;
+}
+
 export interface CandleSnapshot {
   /** Цены закрытия дневных свечей, старые → новые. */
   closes: number[];
@@ -135,6 +179,30 @@ export class MarketData {
       if (!best || cand.daysToCutoff > best.daysToCutoff) best = cand;
     }
     return best;
+  }
+
+  /** Стакан: лучшие уровни, спред. null — если пустой. */
+  async orderbook(instrumentId: string, depth = 20): Promise<OrderbookSnapshot | null> {
+    await this.ensure();
+    const res = (await withRetry(
+      async () =>
+        extractResult(await this.mcp.callTool("invest_get_orderbook", { instrumentId, depth })),
+      { label: "invest_get_orderbook" },
+    )) as any;
+
+    const parse = (arr: any[]) =>
+      (arr ?? [])
+        .map((x) => ({ price: parseMoney(x.price), qty: Number(x.quantity ?? 0) }))
+        .filter((l) => l.price > 0 && l.qty > 0);
+    const bids = parse(res?.bids);
+    const asks = parse(res?.asks);
+    if (bids.length === 0 || asks.length === 0) return null;
+
+    const bestBid = bids[0]!.price;
+    const bestAsk = asks[0]!.price;
+    const mid = (bestBid + bestAsk) / 2;
+    const spreadPct = mid > 0 ? ((bestAsk - bestBid) / mid) * 100 : Infinity;
+    return { bids, asks, bestBid, bestAsk, mid, spreadPct };
   }
 
   /** Дневные свечи за последние `days` дней. */

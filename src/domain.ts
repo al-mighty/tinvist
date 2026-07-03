@@ -42,6 +42,8 @@ export interface CreateOrderRequest {
   orderType: "market" | "limit" | "bestprice";
   /** Цена за единицу (для limit), в валюте инструмента. */
   price?: number;
+  /** Алгоритм исполнения limit-заявки. */
+  timeInForce?: "day" | "fak" | "fok";
   /** Ключ идемпотентности (broker order_id, где поддерживается). */
   idempotencyKey?: string;
 }

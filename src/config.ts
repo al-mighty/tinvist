@@ -58,6 +58,11 @@ const EnvSchema = z.object({
   RSI_TP_PCT: z.coerce.number().default(4),
   RSI_SL_PCT: z.coerce.number().default(3),
 
+  // Лимитные заявки и ликвидность
+  USE_LIMIT_ORDERS: bool(true), // marketable-limit вместо market (контроль проскальзывания)
+  LIMIT_SLIPPAGE_CAP_PCT: z.coerce.number().default(0.3), // макс. проход по стакану, %
+  MAX_SPREAD_PCT: z.coerce.number().default(0.5), // фильтр ликвидности: не входить при спреде шире
+
   // Дивидендный фактор стратегии
   DIV_ENABLED: bool(true),
   DIV_ENTRY_WINDOW_DAYS: z.coerce.number().default(10), // покупать за ≤ N дней до отсечки
