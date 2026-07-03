@@ -96,10 +96,7 @@ export class RsiStrategy {
 
     try {
       const portfolio = await this.backend.getPortfolio(accountId);
-      const cash = portfolio.positions
-        .filter((p) => p.instrumentType === "currency")
-        .reduce((s, p) => s + p.valueRub, 0);
-      let cashLeft = cash;
+      let cashLeft = portfolio.cashRub;
 
       const heldShares = portfolio.positions.filter(
         (p) => p.instrumentType === "share" && p.quantity > 0,

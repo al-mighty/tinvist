@@ -28,6 +28,8 @@ export interface Position {
 export interface Portfolio {
   accountId: string;
   totalValueRub: number;
+  /** Свободный кэш (из totalAmountCurrencies) — надёжнее, чем сумма позиций. */
+  cashRub: number;
   positions: Position[];
 }
 

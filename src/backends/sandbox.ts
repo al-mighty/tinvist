@@ -93,6 +93,7 @@ export class SandboxBackend implements TradingBackend {
     return {
       accountId,
       totalValueRub: parseMoney(res?.totalAmountPortfolio),
+      cashRub: parseMoney(res?.totalAmountCurrencies),
       positions,
     };
   }

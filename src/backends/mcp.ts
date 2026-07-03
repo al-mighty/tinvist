@@ -76,6 +76,7 @@ export class McpBackend implements TradingBackend {
     return {
       accountId,
       totalValueRub: parseMoney(res?.totalAmountPortfolio),
+      cashRub: parseMoney(res?.totalAmountCurrencies),
       positions,
     };
   }

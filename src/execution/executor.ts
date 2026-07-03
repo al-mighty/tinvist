@@ -101,8 +101,13 @@ export class Executor {
     try {
       const portfolio = await this.backend.getPortfolio(accountId);
       totalValueRub = portfolio.totalValueRub;
-      const nonCash = portfolio.positions.filter((p) => p.instrumentType !== "currency" && p.quantity > 0);
-      investedRub = nonCash.reduce((s, p) => s + p.valueRub, 0);
+      // Кэш из totalAmountCurrencies; инвестировано = всё минус кэш (надёжно).
+      investedRub = Math.max(0, totalValueRub - portfolio.cashRub);
+      // Реальные позиции — с непустым типом, не валюта (валютная позиция в prod
+      // приходит с пустым instrumentType).
+      const nonCash = portfolio.positions.filter(
+        (p) => p.instrumentType && p.instrumentType !== "currency" && p.quantity > 0,
+      );
       openPositions = nonCash.length;
       const pos = portfolio.positions.find(
         (p) => p.instrumentId === proposal.instrument || p.ticker === proposal.instrument,
