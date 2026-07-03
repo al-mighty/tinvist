@@ -62,7 +62,8 @@ export class McpBackend implements TradingBackend {
     });
     const positions: Position[] = ((res?.positions ?? []) as any[]).map((p) => {
       const qty = parseMoney(p.quantity);
-      const price = parseMoney(p.currentPrice);
+      // prod не всегда отдаёт currentPrice — фолбэк на среднюю цену входа.
+      const price = parseMoney(p.currentPrice) || parseMoney(p.averagePositionPrice);
       return {
         instrumentId: p.instrumentUid ?? p.figi ?? "",
         instrumentType: p.instrumentType ?? "",

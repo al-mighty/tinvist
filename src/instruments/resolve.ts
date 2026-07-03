@@ -66,4 +66,38 @@ export class InstrumentResolver {
     const list = await this.find(query, kind);
     return list[0] ?? null;
   }
+
+  /**
+   * Резолв акции по UID через invest_get_share (find_instrument по UID не ищет).
+   * Нужен для сопровождения позиций: prod-портфель отдаёт только instrumentUid,
+   * без ticker/lot/type. null — если это не акция / не найдено.
+   */
+  async byUid(uid: string): Promise<InstrumentInfo | null> {
+    await this.ensure();
+    try {
+      const res = (await withRetry(
+        async () =>
+          extractResult(
+            await this.mcp.callTool("invest_get_share", {
+              id: uid,
+              idType: "INSTRUMENT_ID_TYPE_UID",
+              responseView: ["FULL"],
+            }),
+          ),
+        { label: "invest_get_share" },
+      )) as any;
+      const i = res?.instrument ?? res;
+      if (!i?.uid) return null;
+      return {
+        uid: i.uid,
+        ticker: i.ticker ?? "",
+        classCode: i.classCode ?? "",
+        name: i.name ?? "",
+        lot: typeof i.lot === "number" ? i.lot : Number(i.lot ?? 1),
+        kind: "INSTRUMENT_TYPE_SHARE",
+      };
+    } catch {
+      return null; // не акция или не найдено
+    }
+  }
 }

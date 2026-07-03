@@ -50,6 +50,11 @@ export interface RsiParams {
   divSellAfterPayment: boolean; // true: держать через отсечку, продать после выплаты
 }
 
+/** Известные валютные UID (кэш) — исключаем из «удерживаемых бумаг». */
+const CURRENCY_UIDS = new Set<string>([
+  "a92e2e25-a698-45cc-a781-167cf465257c", // RUB (RUB000UTSTOM)
+]);
+
 const DEFAULTS: RsiParams = {
   period: 14,
   oversold: 30,
@@ -98,16 +103,21 @@ export class RsiStrategy {
       const portfolio = await this.backend.getPortfolio(accountId);
       let cashLeft = portfolio.cashRub;
 
+      // Валюта/кэш: prod отдаёт валютную позицию без instrumentType, поэтому
+      // исключаем и по типу, и по известным валютным UID.
       const heldShares = portfolio.positions.filter(
-        (p) => p.instrumentType === "share" && p.quantity > 0,
+        (p) => p.quantity > 0 && p.instrumentType !== "currency" && !CURRENCY_UIDS.has(p.instrumentId),
       );
       const heldUids = new Set(heldShares.map((p) => p.instrumentId));
 
       // ── ВЫХОДЫ: управляем открытыми позициями (RSI≥70 / тейк / стоп) ──
       for (const pos of heldShares) {
-        const info = await resolver.resolveOne(pos.ticker || pos.instrumentId);
+        // prod-позиции без ticker/lot → резолвим по UID (invest_get_share).
+        const info =
+          (await resolver.byUid(pos.instrumentId)) ??
+          (pos.ticker ? await resolver.resolveOne(pos.ticker) : null);
         if (!info) {
-          notes.push(`${pos.ticker ?? pos.instrumentId}: не найден для выхода`);
+          notes.push(`${pos.ticker || pos.instrumentId}: не резолвится (не акция?) — пропуск выхода`);
           continue;
         }
         const lots = Math.floor(pos.quantity / info.lot);
