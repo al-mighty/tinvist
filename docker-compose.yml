@@ -1,0 +1,18 @@
+services:
+  tinvist:
+    build: .
+    container_name: tinvist
+    restart: unless-stopped
+    env_file: .env
+    # Планировщик: RSI+дивидендная стратегия по расписанию.
+    # Watchlist и accountId — не секреты; конфиг/токены приходят из .env.
+    command: ["npx", "tsx", "src/cli.ts", "loop", "SBER,GAZP,ALRS,MTSS", "2118691914"]
+    volumes:
+      # Персистим пик капитала (kill-switch) и audit-журнал между пересборками.
+      - ./data:/app/data
+      - ./audit:/app/audit
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

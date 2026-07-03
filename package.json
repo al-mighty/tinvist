@@ -1,0 +1,26 @@
+{
+  "name": "tinvist",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Торговый агент поверх T-Bank Invest MCP (гибрид: предложение + подтверждение)",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "cli": "NODE_EXTRA_CA_CERTS=certs/russian-trusted-ca.pem tsx src/cli.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "dotenv": "^16.4.5",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
