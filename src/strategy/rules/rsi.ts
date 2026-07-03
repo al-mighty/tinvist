@@ -197,6 +197,15 @@ export class RsiStrategy {
           continue;
         }
 
+        // Circuit breaker: не входим в аномальное движение (флэшкрэш/каскад).
+        if (this.cfg.VOLATILITY_ENABLED) {
+          const range = await market.intradayRangePct(info.uid).catch(() => null);
+          if (range != null && range > this.cfg.MAX_INTRADAY_RANGE_PCT) {
+            notes.push(`${info.ticker}: волатильность ${range.toFixed(1)}% > ${this.cfg.MAX_INTRADAY_RANGE_PCT}% — circuit breaker, пропуск`);
+            continue;
+          }
+        }
+
         let rationale: string | null = null;
         let confidence = 0.6;
 

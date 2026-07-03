@@ -205,6 +205,46 @@ export class MarketData {
     return { bids, asks, bestBid, bestAsk, mid, spreadPct };
   }
 
+  /**
+   * Внутридневной размах, % — (max high − min low)/last по 5-мин свечам за
+   * последние `hours` ч. Прокси аномальной волатильности (флэшкрэш/каскад).
+   * null — если нет данных.
+   */
+  async intradayRangePct(instrumentId: string, hours = 1): Promise<number | null> {
+    await this.ensure();
+    const to = new Date();
+    const from = new Date(to.getTime() - hours * 60 * 60 * 1000);
+    const res = (await withRetry(
+      async () =>
+        extractResult(
+          await this.mcp.callTool("invest_get_candles", {
+            instrumentId,
+            interval: "CANDLE_INTERVAL_5_MIN",
+            from: from.toISOString(),
+            to: to.toISOString(),
+            limit: hours * 12 + 2,
+          }),
+        ),
+      { label: "invest_get_candles(5m)" },
+    )) as any;
+
+    const candles = (res?.candles ?? []) as any[];
+    if (candles.length === 0) return null;
+    let maxHigh = -Infinity;
+    let minLow = Infinity;
+    let last = 0;
+    for (const c of candles) {
+      const hi = parseMoney(c.high);
+      const lo = parseMoney(c.low);
+      if (hi > 0) maxHigh = Math.max(maxHigh, hi);
+      if (lo > 0) minLow = Math.min(minLow, lo);
+      const cl = parseMoney(c.close);
+      if (cl > 0) last = cl;
+    }
+    if (last <= 0 || !isFinite(maxHigh) || !isFinite(minLow)) return null;
+    return ((maxHigh - minLow) / last) * 100;
+  }
+
   /** Дневные свечи за последние `days` дней. */
   async dailyCandles(instrumentId: string, days = 30): Promise<CandleSnapshot | null> {
     await this.ensure();

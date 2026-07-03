@@ -63,6 +63,10 @@ const EnvSchema = z.object({
   LIMIT_SLIPPAGE_CAP_PCT: z.coerce.number().default(0.3), // макс. проход по стакану, %
   MAX_SPREAD_PCT: z.coerce.number().default(0.5), // фильтр ликвидности: не входить при спреде шире
 
+  // Circuit breaker по волатильности (не входить в аномальное движение)
+  VOLATILITY_ENABLED: bool(true),
+  MAX_INTRADAY_RANGE_PCT: z.coerce.number().default(3), // размах за час выше → стоп входов
+
   // Дивидендный фактор стратегии
   DIV_ENABLED: bool(true),
   DIV_ENTRY_WINDOW_DAYS: z.coerce.number().default(10), // покупать за ≤ N дней до отсечки
