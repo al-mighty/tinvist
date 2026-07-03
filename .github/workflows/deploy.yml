@@ -32,7 +32,7 @@ jobs:
           # Синхронизируем исходники, СОХРАНЯЯ секреты и рантайм-состояние на VPS.
           rsync -avz --delete \
             --exclude='.git' --exclude='node_modules' --exclude='dist' \
-            --exclude='.env' --exclude='data' --exclude='audit' \
+            --exclude='.env' --exclude='/data' --exclude='/audit' \
             -e "ssh -i ~/.ssh/deploy_key" \
             ./ root@${{ secrets.VPS_HOST }}:/opt/tinvist/
           # Пересобираем и перезапускаем контейнер.
