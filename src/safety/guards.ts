@@ -104,6 +104,21 @@ export function checkGuards(
         `Уже открыто ${ctx.openPositions} позиций при лимите MAX_OPEN_POSITIONS=${cfg.MAX_OPEN_POSITIONS}.`,
       );
     }
+
+    // Гейт прибыльности: цель сделки должна покрывать издержки round-trip с запасом.
+    const roundTripPct = 2 * cfg.COMMISSION_PCT + cfg.SLIPPAGE_PCT;
+    if (proposal.targetPct != null) {
+      const required = roundTripPct * cfg.MIN_NET_EDGE_RATIO;
+      if (proposal.targetPct < required) {
+        violations.push(
+          `Окупаемость: цель ${proposal.targetPct}% < издержки ${roundTripPct.toFixed(2)}% × ${cfg.MIN_NET_EDGE_RATIO} = ${required.toFixed(2)}% — сделка не окупает комиссию.`,
+        );
+      }
+    } else {
+      warnings.push(
+        `Цель сделки не задана — окупаемость по комиссии не проверена (round-trip ≈ ${roundTripPct.toFixed(2)}%).`,
+      );
+    }
   }
 
   // Мягкие сигналы — не блокируют, но подсвечиваются человеку.

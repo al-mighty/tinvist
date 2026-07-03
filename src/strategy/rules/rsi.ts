@@ -231,6 +231,7 @@ export class RsiStrategy {
           price,
           lotSize: info.lot,
           confidence,
+          targetPct: this.p.takeProfitPct,
           rationale,
           createdAt: now,
         });

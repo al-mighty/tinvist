@@ -36,6 +36,11 @@ const EnvSchema = z.object({
   // Безопасность
   DRY_RUN: bool(true),
   ALLOW_REAL_TRADING: bool(false),
+  // Гейт прибыльности (окупаемость по комиссии)
+  COMMISSION_PCT: z.coerce.number().default(0.3), // комиссия за сторону, % (Инвестор=0.3, Трейдер=0.04)
+  SLIPPAGE_PCT: z.coerce.number().default(0.1), // буфер на спред/проскальзывание, %
+  MIN_NET_EDGE_RATIO: z.coerce.number().default(1.5), // тейк должен быть ≥ издержки × это
+
   MAX_ORDER_RUB: z.coerce.number().positive().default(10_000),
   MAX_POSITION_SHARE: z.coerce.number().min(0).max(1).default(0.25),
   MAX_DAILY_TURNOVER_RUB: z.coerce.number().positive().default(50_000),
