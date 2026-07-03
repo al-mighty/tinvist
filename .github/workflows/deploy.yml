@@ -47,3 +47,15 @@ jobs:
             docker logs tinvist --tail 20 2>&1 | grep -q "Планировщик запущен" \
               && echo "✅ loop запущен" || (echo "❌ loop не стартовал" && docker logs tinvist --tail 40 && exit 1)
           '
+
+      - name: Notify Telegram
+        if: success() && env.TG_TOKEN != ''
+        env:
+          TG_TOKEN: ${{ secrets.TG_DEPLOY_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TG_DEPLOY_CHAT_ID }}
+        run: |
+          COMMITS=$(git log --oneline -3 --format="• %s" | head -3)
+          MSG="🚀 tinvist deployed"$'\n\n'"${COMMITS}"$'\n'"✅ loop перезапущен на VPS"
+          curl -sS -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TG_CHAT}" \
+            --data-urlencode "text=${MSG}" >/dev/null
