@@ -189,6 +189,7 @@ BACKEND=prod  +  DRY_RUN=false  +  ALLOW_REAL_TRADING=true
 | `MAX_ORDER_RUB` | Максимальная сумма одной сделки |
 | `MAX_POSITION_SHARE` | Максимальная доля инструмента в портфеле (только на покупку) |
 | `MAX_DAILY_TURNOVER_RUB` | Дневной оборот заявок (по audit-логу) |
+| **Гейт прибыльности** | Блокирует покупку, если её цель (тейк) не покрывает round-trip издержки: `targetPct ≥ (2·COMMISSION_PCT + SLIPPAGE_PCT)·MIN_NET_EDGE_RATIO`. Убивает убыточный по комиссии скальпинг |
 
 **Сохранение капитала** (защита от разорения; применяется к покупкам,
 продажи-сокращение риска всегда разрешены):
@@ -233,6 +234,8 @@ BACKEND=prod  +  DRY_RUN=false  +  ALLOW_REAL_TRADING=true
 | `MAX_ORDER_RUB` | `10000` | Лимит суммы сделки |
 | `MAX_POSITION_SHARE` | `0.25` | Лимит доли позиции (0..1) |
 | `MAX_DAILY_TURNOVER_RUB` | `50000` | Лимит дневного оборота |
+| `COMMISSION_PCT` / `SLIPPAGE_PCT` | `0.3` / `0.1` | Комиссия за сторону / буфер спреда, % (гейт прибыльности) |
+| `MIN_NET_EDGE_RATIO` | `1.5` | Тейк должен быть ≥ round-trip издержки × это |
 | `MAX_DRAWDOWN_PCT` | `15` | Kill-switch: стоп покупок при просадке от пика (0=выкл) |
 | `EQUITY_FLOOR_RUB` | `0` | Пол капитала: ниже — покупки запрещены (0=выкл) |
 | `MAX_TOTAL_EXPOSURE_PCT` | `0.7` | Макс. доля в бумагах (подушка кэша) |
