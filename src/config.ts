@@ -91,6 +91,10 @@ const EnvSchema = z.object({
   // Идемпотентность/дедуп заявок (защита от дублей)
   DEDUP_WINDOW_SEC: z.coerce.number().int().default(120), // блок идентичной заявки в этом окне
 
+  // Аналитика доходности vs бенчмарк
+  BENCHMARK_UID: z.string().default("1c9d472c-975c-4212-8fb9-fb30639dc01f"), // EQMX «ВИМ – Индекс МосБиржи»
+  BENCHMARK_TICKER: z.string().default("EQMX"),
+
   // Ежедневная сводка в Telegram (планировщик)
   DAILY_REPORT_ENABLED: bool(true),
   REPORT_HOUR_MSK: z.coerce.number().int().default(19), // час МСК для сводки
