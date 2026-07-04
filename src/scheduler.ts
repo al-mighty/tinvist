@@ -25,6 +25,21 @@ export async function runLoop(
   process.once("SIGINT", onStop);
   process.once("SIGTERM", onStop);
 
+  // Алерты о фатальных сбоях: шлём в Telegram и падаем (docker перезапустит).
+  const fatal = (kind: string) => (err: unknown) => {
+    const msg = err instanceof Error ? err.stack || err.message : String(err);
+    console.error(`FATAL ${kind}: ${msg}`);
+    if (cfg.ALERT_ENABLED) {
+      sendTelegram(cfg, `🚨 tinvist УПАЛ (${kind}):\n${msg.slice(0, 500)}`)
+        .catch(() => {})
+        .finally(() => process.exit(1));
+    } else {
+      process.exit(1);
+    }
+  };
+  process.once("uncaughtException", fatal("uncaughtException"));
+  process.once("unhandledRejection", fatal("unhandledRejection"));
+
   // Telegram-пульт: единый диспетчер апдейтов (кнопки + подтверждения).
   // Поднимаем только для telegram-канала; он же служит approver'ом.
   let controller: TelegramController | null = null;
@@ -40,6 +55,8 @@ export async function runLoop(
   );
 
   let tick = 0;
+  let consecutiveFailures = 0;
+  let alerted = false;
   while (!stop) {
     tick++;
     const now = new Date();
@@ -56,9 +73,25 @@ export async function runLoop(
           approver: controller ?? undefined,
           strategyEnabled: controller?.isStrategyEnabled(),
         });
+        // Успех: если ранее алертили — сообщаем о восстановлении.
+        if (alerted) {
+          await sendTelegram(cfg, "✅ tinvist: работа восстановлена (цикл снова проходит).").catch(() => {});
+          alerted = false;
+        }
+        consecutiveFailures = 0;
       } catch (err) {
         // Сбой цикла (сеть/данные) не должен ронять планировщик.
-        console.error(`[${ts}] ошибка цикла: ${err instanceof Error ? err.message : err}`);
+        const emsg = err instanceof Error ? err.message : String(err);
+        console.error(`[${ts}] ошибка цикла: ${emsg}`);
+        consecutiveFailures++;
+        // Алерт при N ошибках подряд — один раз, до восстановления.
+        if (cfg.ALERT_ENABLED && !alerted && consecutiveFailures >= cfg.ALERT_AFTER_FAILURES) {
+          await sendTelegram(
+            cfg,
+            `🚨 tinvist: ${consecutiveFailures} ошибок цикла подряд.\nПоследняя: ${emsg.slice(0, 400)}`,
+          ).catch(() => {});
+          alerted = true;
+        }
       }
     }
 

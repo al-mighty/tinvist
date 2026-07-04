@@ -95,6 +95,10 @@ const EnvSchema = z.object({
   BENCHMARK_UID: z.string().default("1c9d472c-975c-4212-8fb9-fb30639dc01f"), // EQMX «ВИМ – Индекс МосБиржи»
   BENCHMARK_TICKER: z.string().default("EQMX"),
 
+  // Алерты о сбоях в Telegram
+  ALERT_ENABLED: bool(true),
+  ALERT_AFTER_FAILURES: z.coerce.number().int().positive().default(3), // N ошибок подряд → алерт
+
   // Ежедневная сводка в Telegram (планировщик)
   DAILY_REPORT_ENABLED: bool(true),
   REPORT_HOUR_MSK: z.coerce.number().int().default(19), // час МСК для сводки
