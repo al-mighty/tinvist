@@ -2,6 +2,7 @@ import type { Config } from "../config.js";
 import type { TradingBackend } from "../backends/types.js";
 import { Executor } from "../execution/executor.js";
 import { createApprover } from "../approval/factory.js";
+import type { Approver } from "../approval/types.js";
 import { RsiStrategy } from "./rules/rsi.js";
 import { describeProposal } from "./types.js";
 
@@ -15,9 +16,10 @@ export async function runRsiCycle(
   backend: TradingBackend,
   accountId: string,
   watchlist: string[],
+  opts?: { approver?: Approver; strategyEnabled?: boolean },
 ): Promise<void> {
   const strategy = new RsiStrategy(cfg, backend, {
-    strategyEnabled: cfg.STRATEGY_ENABLED,
+    strategyEnabled: opts?.strategyEnabled ?? cfg.STRATEGY_ENABLED,
     period: cfg.RSI_PERIOD,
     oversold: cfg.RSI_OVERSOLD,
     overbought: cfg.RSI_OVERBOUGHT,
@@ -38,7 +40,7 @@ export async function runRsiCycle(
   console.log(`Предложено сделок: ${proposals.length}`);
   for (const p of proposals) console.log(`  • ${describeProposal(p)}`);
 
-  const executor = new Executor(backend, cfg, createApprover(cfg));
+  const executor = new Executor(backend, cfg, opts?.approver ?? createApprover(cfg));
   for (const proposal of proposals) {
     const outcome = await executor.execute(proposal, accountId);
     console.log(`[${outcome.status}] ${outcome.message}`);

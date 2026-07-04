@@ -3,6 +3,7 @@ import type { TradingBackend } from "./backends/types.js";
 import { runRsiCycle } from "./strategy/run.js";
 import { buildStatusReport } from "./report/status.js";
 import { sendTelegram, reportSentFor, markReportSent } from "./report/notify.js";
+import { TelegramController } from "./telegram/controller.js";
 
 /**
  * Встроенный планировщик: периодически гоняет стратегию, чтобы входы/выходы,
@@ -24,6 +25,14 @@ export async function runLoop(
   process.once("SIGINT", onStop);
   process.once("SIGTERM", onStop);
 
+  // Telegram-пульт: единый диспетчер апдейтов (кнопки + подтверждения).
+  // Поднимаем только для telegram-канала; он же служит approver'ом.
+  let controller: TelegramController | null = null;
+  if (cfg.APPROVAL_CHANNEL === "telegram") {
+    controller = new TelegramController(cfg, () => buildStatusReport(cfg, backend, accountId));
+    await controller.start().catch((e) => console.error(`пульт не поднялся: ${e?.message ?? e}`));
+  }
+
   console.log(
     `Планировщик запущен: каждые ${cfg.LOOP_INTERVAL_SEC}с, watchlist ${watchlist.join(",")}, счёт ${accountId}.\n` +
       `Окно: ${cfg.LOOP_MARKET_HOURS_ONLY ? `${cfg.LOOP_START_HOUR_MSK}:00–${cfg.LOOP_END_HOUR_MSK}:00 МСК (вкл. выходные; торгуемость — по статусу биржи)` : "круглосуточно"}.` +
@@ -36,12 +45,17 @@ export async function runLoop(
     const now = new Date();
     const ts = now.toISOString();
 
-    if (cfg.LOOP_MARKET_HOURS_ONLY && !isMarketOpen(now, cfg)) {
+    if (controller?.isPaused()) {
+      console.log(`[${ts}] тик ${tick}: торговля на паузе (пульт) — пропуск.`);
+    } else if (cfg.LOOP_MARKET_HOURS_ONLY && !isMarketOpen(now, cfg)) {
       console.log(`[${ts}] тик ${tick}: биржа закрыта — пропуск.`);
     } else {
       console.log(`\n──── [${ts}] тик ${tick} ────`);
       try {
-        await runRsiCycle(cfg, backend, accountId, watchlist);
+        await runRsiCycle(cfg, backend, accountId, watchlist, {
+          approver: controller ?? undefined,
+          strategyEnabled: controller?.isStrategyEnabled(),
+        });
       } catch (err) {
         // Сбой цикла (сеть/данные) не должен ронять планировщик.
         console.error(`[${ts}] ошибка цикла: ${err instanceof Error ? err.message : err}`);
@@ -68,6 +82,7 @@ export async function runLoop(
     console.log(`Следующий тик через ${Math.round(sleepMs / 1000)}с (базовый ${cfg.LOOP_INTERVAL_SEC} + джиттер ${Math.round(jitterMs / 1000)}).`);
     await interruptibleSleep(sleepMs, () => stop);
   }
+  await controller?.stop();
 }
 
 /** Отправляет ежедневную сводку один раз в день после REPORT_HOUR_MSK. */
