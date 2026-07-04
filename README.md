@@ -64,6 +64,7 @@ npm run cli -- quote <uid>  # последняя цена
 | `accounts` | Список счетов |
 | `portfolio [accountId]` | Портфель (по умолчанию — первый счёт) |
 | `quote <instrumentId>` | Последняя цена инструмента (UID) |
+| `status [accountId]` | Сводка: капитал, кэш, позиции с нереализ. P&L, просадка, сделки за день |
 
 ### Торговля (полный конвейер guard → подтверждение → исполнение)
 
@@ -164,6 +165,10 @@ npm run cli -- loop SBER,GAZP,MTSS <accountId>
 подтверждение переключи на Telegram (`APPROVAL_CHANNEL=telegram`) — тогда цикл
 шлёт карточки в чат и ждёт ✅/❌ на каждый сигнал.
 
+**Ежедневная сводка** (`DAILY_REPORT_ENABLED`): раз в день после
+`REPORT_HOUR_MSK` (по умолчанию 19:00 МСК) планировщик шлёт в Telegram отчёт
+`status` — капитал, позиции с нереализ. P&L, просадку, сделки за день.
+
 > **Важно:** «программные» стопы (RSI/тейк/стоп) и kill-switch срабатывают
 > только в момент тика. Между тиками позиция не защищена — интервал стоит
 > держать небольшим (напр. 5–15 мин) в торговые часы. Для защиты 24/7 (в т.ч.
@@ -253,6 +258,7 @@ BACKEND=prod  +  DRY_RUN=false  +  ALLOW_REAL_TRADING=true
 | `LOOP_MARKET_HOURS_ONLY` | `true` | Торговать только в часы биржи |
 | `LOOP_START_HOUR_MSK` / `LOOP_END_HOUR_MSK` | `10` / `24` | Окно торгов, МСК |
 | `LOOP_MAX_TICKS` | `0` | Лимит тиков (0=бесконечно; для тестов) |
+| `DAILY_REPORT_ENABLED` / `REPORT_HOUR_MSK` | `true` / `19` | Ежедневная P&L-сводка в Telegram и час отправки (МСК) |
 | `RSI_PERIOD` / `RSI_OVERSOLD` / `RSI_OVERBOUGHT` | `14` / `30` / `70` | Параметры RSI-стратегии |
 | `RSI_TP_PCT` / `RSI_SL_PCT` | `4` / `3` | Тейк-профит / стоп-лосс, % от входа |
 | `DIV_ENABLED` | `true` | Дивидендный фактор в стратегии |
