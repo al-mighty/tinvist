@@ -278,6 +278,7 @@ BACKEND=prod  +  DRY_RUN=false  +  ALLOW_REAL_TRADING=true
 | `VOLATILITY_ENABLED` / `MAX_INTRADAY_RANGE_PCT` | `true` / `3` | Circuit breaker: стоп входов при размахе за час выше % |
 | `CARRY_ENABLED` / `CARRY_TICKER` | `true` / `LQDT` | Парковка кэша в фонд ликвидности (ежедневный карри) |
 | `CASH_RESERVE_RUB` | `2000` | Рабочий капитал под стратегию; избыток → в фонд |
+| `STRATEGY_ENABLED` | `true` | `false` → режим «только карри»: без спекулятивных входов (выходы+карри работают) |
 | `DEDUP_WINDOW_SEC` | `120` | Окно дедупа идентичных заявок (идемпотентность) |
 | `LOOP_JITTER_SEC` | `120` | Случайный разброс тика планировщика |
 | `MAX_DRAWDOWN_PCT` | `15` | Kill-switch: стоп покупок при просадке от пика (0=выкл) |
