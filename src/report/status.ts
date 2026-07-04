@@ -30,7 +30,10 @@ export async function buildStatusReport(
       lines.push("Позиции:");
       for (const pos of held) {
         const info = await resolver.byUid(pos.instrumentId).catch(() => null);
-        const ticker = info?.ticker || pos.ticker || pos.instrumentId.slice(0, 8);
+        const ticker =
+          pos.instrumentId === cfg.CARRY_UID
+            ? `${cfg.CARRY_TICKER} (карри)`
+            : info?.ticker || pos.ticker || pos.instrumentId.slice(0, 8);
         const last = await backend.getLastPrice(pos.instrumentId).catch(() => pos.avgPrice);
         const unreal = (last - pos.avgPrice) * pos.quantity;
         const unrealPct = pos.avgPrice > 0 ? (last / pos.avgPrice - 1) * 100 : 0;
