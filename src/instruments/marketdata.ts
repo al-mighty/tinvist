@@ -181,6 +181,24 @@ export class MarketData {
     return best;
   }
 
+  /**
+   * Торгуется ли инструмент прямо сейчас (нормальная сессия, включая торги
+   * выходного дня / дилерскую сессию). Спрашиваем биржу — надёжнее хардкода часов.
+   */
+  async isTradeable(instrumentId: string): Promise<boolean> {
+    await this.ensure();
+    const res = (await withRetry(
+      async () =>
+        extractResult(await this.mcp.callTool("invest_get_trading_statuses", { instrumentId: [instrumentId] })),
+      { label: "invest_get_trading_statuses" },
+    )) as any;
+    const st = res?.tradingStatuses?.[0];
+    if (!st) return false;
+    const s = st.tradingStatus as string;
+    const normal = s === "SECURITY_TRADING_STATUS_NORMAL_TRADING" || s === "SECURITY_TRADING_STATUS_DEALER_NORMAL_TRADING";
+    return normal && (st.limitOrderAvailableFlag === true || st.marketOrderAvailableFlag === true);
+  }
+
   /** Стакан: лучшие уровни, спред. null — если пустой. */
   async orderbook(instrumentId: string, depth = 20): Promise<OrderbookSnapshot | null> {
     await this.ensure();

@@ -120,6 +120,11 @@ export class RsiStrategy {
         const lots = Math.floor(pos.quantity / info.lot);
         if (lots < 1) continue;
 
+        if (!(await market.isTradeable(info.uid))) {
+          notes.push(`${info.ticker}: торги закрыты — выход отложен`);
+          continue;
+        }
+
         const book = await market.orderbook(info.uid).catch(() => null);
         const price = book ? book.mid : await this.backend.getLastPrice(info.uid);
         const candles = await market.dailyCandles(info.uid, 45).catch(() => null);
@@ -182,6 +187,11 @@ export class RsiStrategy {
           continue;
         }
         if (heldUids.has(info.uid)) continue; // уже в портфеле — управляется выходами
+
+        if (!(await market.isTradeable(info.uid))) {
+          notes.push(`${info.ticker}: торги закрыты — пропуск`);
+          continue;
+        }
 
         // Фильтр ликвидности: не входим в широкий спред (дорогое проскальзывание).
         const book = await market.orderbook(info.uid).catch(() => null);
@@ -265,7 +275,7 @@ export class RsiStrategy {
       }
 
       // ── КАРРИ: паркуем избыточный кэш (сверх резерва) в фонд ликвидности ──
-      if (this.cfg.CARRY_ENABLED) {
+      if (this.cfg.CARRY_ENABLED && (await market.isTradeable(this.cfg.CARRY_UID).catch(() => false))) {
         const excess = cashLeft - this.cfg.CASH_RESERVE_RUB;
         const book = await market.orderbook(this.cfg.CARRY_UID).catch(() => null);
         const price = book ? book.bestAsk : await this.backend.getLastPrice(this.cfg.CARRY_UID).catch(() => 0);

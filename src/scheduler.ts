@@ -26,7 +26,7 @@ export async function runLoop(
 
   console.log(
     `Планировщик запущен: каждые ${cfg.LOOP_INTERVAL_SEC}с, watchlist ${watchlist.join(",")}, счёт ${accountId}.\n` +
-      `Часы биржи: ${cfg.LOOP_MARKET_HOURS_ONLY ? `${cfg.LOOP_START_HOUR_MSK}:00–${cfg.LOOP_END_HOUR_MSK}:00 МСК, будни` : "круглосуточно"}.` +
+      `Окно: ${cfg.LOOP_MARKET_HOURS_ONLY ? `${cfg.LOOP_START_HOUR_MSK}:00–${cfg.LOOP_END_HOUR_MSK}:00 МСК (вкл. выходные; торгуемость — по статусу биржи)` : "круглосуточно"}.` +
       (cfg.LOOP_MAX_TICKS > 0 ? ` Лимит тиков: ${cfg.LOOP_MAX_TICKS}.` : ""),
   );
 
@@ -87,11 +87,13 @@ async function maybeSendDailyReport(
   console.log(`Ежедневная сводка отправлена (${date}).`);
 }
 
-/** Открыта ли биржа: будни и час в окне [start, end) по МСК (UTC+3). */
+/**
+ * Грубый фильтр по часам МСК (UTC+3) — чтобы не гонять цикл глубокой ночью.
+ * Выходные НЕ блокируем: торги выходного дня разрешены, а реальную торгуемость
+ * каждого инструмента проверяет статус-гейт в стратегии (invest_get_trading_statuses).
+ */
 function isMarketOpen(now: Date, cfg: Config): boolean {
   const msk = new Date(now.getTime() + 3 * 60 * 60 * 1000);
-  const weekday = msk.getUTCDay(); // 0=вс, 6=сб (для сдвинутой на МСК даты)
-  if (weekday === 0 || weekday === 6) return false;
   const hour = msk.getUTCHours();
   return hour >= cfg.LOOP_START_HOUR_MSK && hour < cfg.LOOP_END_HOUR_MSK;
 }
