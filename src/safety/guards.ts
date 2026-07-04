@@ -40,6 +40,12 @@ export function checkGuards(
   const violations: string[] = [];
   const warnings: string[] = [];
 
+  // Карри (парковка кэша в фонд ликвидности) — cash-equivalent, не риск-сделка:
+  // спекулятивные лимиты не применяем (отправка всё равно под DRY_RUN/подтверждением).
+  if (proposal.kind === "carry") {
+    return { ok: true, violations, warnings: ["Парковка кэша в фонд ликвидности (карри)."] };
+  }
+
   const notional = estimatedNotional(proposal);
 
   // 1. Лимит на размер одной сделки.

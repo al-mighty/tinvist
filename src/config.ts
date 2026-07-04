@@ -67,6 +67,12 @@ const EnvSchema = z.object({
   VOLATILITY_ENABLED: bool(true),
   MAX_INTRADAY_RANGE_PCT: z.coerce.number().default(3), // размах за час выше → стоп входов
 
+  // Карри: парковка свободного кэша в фонд ликвидности (ежедневный доход)
+  CARRY_ENABLED: bool(true),
+  CARRY_UID: z.string().default("a240edc6-a605-44b3-9801-37b9f7c3d1ff"), // LQDT «ВИМ Ликвидность»
+  CARRY_TICKER: z.string().default("LQDT"),
+  CASH_RESERVE_RUB: z.coerce.number().default(2000), // держим ликвидным под стратегию, остальное — в фонд
+
   // Дивидендный фактор стратегии
   DIV_ENABLED: bool(true),
   DIV_ENTRY_WINDOW_DAYS: z.coerce.number().default(10), // покупать за ≤ N дней до отсечки

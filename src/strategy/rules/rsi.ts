@@ -101,7 +101,10 @@ export class RsiStrategy {
 
       // Валюта/кэш: prod отдаёт валютную позицию без instrumentType, поэтому
       // исключаем и по типу, и по известным валютным UID.
-      const heldShares = portfolio.positions.filter(isHeldSecurity);
+      // Карри-фонд (LQDT) — не спекулятивная позиция, стратегией не сопровождается.
+      const heldShares = portfolio.positions.filter(
+        (p) => isHeldSecurity(p) && p.instrumentId !== this.cfg.CARRY_UID,
+      );
       const heldUids = new Set(heldShares.map((p) => p.instrumentId));
 
       // ── ВЫХОДЫ: управляем открытыми позициями (RSI≥70 / тейк / стоп) ──
@@ -259,6 +262,33 @@ export class RsiStrategy {
           rationale,
           createdAt: now,
         });
+      }
+
+      // ── КАРРИ: паркуем избыточный кэш (сверх резерва) в фонд ликвидности ──
+      if (this.cfg.CARRY_ENABLED) {
+        const excess = cashLeft - this.cfg.CASH_RESERVE_RUB;
+        const book = await market.orderbook(this.cfg.CARRY_UID).catch(() => null);
+        const price = book ? book.bestAsk : await this.backend.getLastPrice(this.cfg.CARRY_UID).catch(() => 0);
+        if (price > 0 && excess >= price) {
+          const lots = Math.floor(excess / price); // лот фонда = 1
+          const exec = this.orderExec("buy", book, price);
+          proposals.push({
+            instrument: this.cfg.CARRY_UID,
+            instrumentName: `${this.cfg.CARRY_TICKER} · фонд ликвидности`,
+            side: "buy",
+            orderType: exec.orderType,
+            lots,
+            price: exec.price,
+            timeInForce: exec.timeInForce,
+            lotSize: 1,
+            kind: "carry",
+            confidence: 1,
+            rationale: `Парковка кэша: ${lots} лот ${this.cfg.CARRY_TICKER} ≈ ${(lots * price).toFixed(0)}₽ (ежедневный карри по ставке).`,
+            createdAt: now,
+          });
+        } else if (excess > 0) {
+          notes.push(`карри: избыток ${excess.toFixed(0)}₽ < цены лота ${this.cfg.CARRY_TICKER}`);
+        }
       }
     } finally {
       await resolver.close();

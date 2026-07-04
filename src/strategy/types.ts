@@ -16,6 +16,8 @@ export interface TradeProposal {
   instrumentName?: string;
   side: OrderSide;
   orderType: OrderType;
+  /** trade — спекулятивная сделка (все guard-и); carry — парковка кэша (cash-equivalent, guard-и не применяются). */
+  kind?: "trade" | "carry";
   /** Количество лотов. */
   lots: number;
   /** Цена за 1 инструмент, руб. Для market — ожидаемая/справочная. */

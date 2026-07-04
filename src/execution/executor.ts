@@ -5,6 +5,7 @@ import type { Approver } from "../approval/types.js";
 import { AuditLog } from "../audit/log.js";
 import { checkGuards, type PortfolioContext } from "../safety/guards.js";
 import { EquityState } from "../safety/equity-state.js";
+import { CURRENCY_UIDS } from "../domain.js";
 import {
   estimatedNotional,
   describeProposal,
@@ -116,12 +117,18 @@ export class Executor {
     try {
       const portfolio = await this.backend.getPortfolio(accountId);
       totalValueRub = portfolio.totalValueRub;
-      // Кэш из totalAmountCurrencies; инвестировано = всё минус кэш (надёжно).
-      investedRub = Math.max(0, totalValueRub - portfolio.cashRub);
-      // Реальные позиции — с непустым типом, не валюта (валютная позиция в prod
-      // приходит с пустым instrumentType).
+      // Фонд ликвидности (карри) = cash-equivalent, не считаем риск-экспозицией.
+      const carryPos = portfolio.positions.find((p) => p.instrumentId === this.cfg.CARRY_UID);
+      const carryValue = carryPos ? carryPos.valueRub : 0;
+      // Инвестировано (риск) = всё минус кэш минус карри.
+      investedRub = Math.max(0, totalValueRub - portfolio.cashRub - carryValue);
+      // Реальные риск-позиции — не валюта, не карри.
       const nonCash = portfolio.positions.filter(
-        (p) => p.instrumentType && p.instrumentType !== "currency" && p.quantity > 0,
+        (p) =>
+          p.instrumentType !== "currency" &&
+          p.quantity > 0 &&
+          p.instrumentId !== this.cfg.CARRY_UID &&
+          !CURRENCY_UIDS.has(p.instrumentId),
       );
       openPositions = nonCash.length;
       const pos = portfolio.positions.find(
