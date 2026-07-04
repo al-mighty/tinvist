@@ -84,6 +84,10 @@ const EnvSchema = z.object({
   // Идемпотентность/дедуп заявок (защита от дублей)
   DEDUP_WINDOW_SEC: z.coerce.number().int().default(120), // блок идентичной заявки в этом окне
 
+  // Ежедневная сводка в Telegram (планировщик)
+  DAILY_REPORT_ENABLED: bool(true),
+  REPORT_HOUR_MSK: z.coerce.number().int().default(19), // час МСК для сводки
+
   // Подтверждение
   APPROVAL_CHANNEL: z.enum(["cli", "telegram"]).default("telegram"),
   TELEGRAM_BOT_TOKEN: z.string().optional(),

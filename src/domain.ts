@@ -4,6 +4,16 @@
  * выше (стратегия, guard, подтверждение) работает уже с ними.
  */
 
+/** Известные валютные UID (кэш) — исключаем из «удерживаемых бумаг». */
+export const CURRENCY_UIDS = new Set<string>([
+  "a92e2e25-a698-45cc-a781-167cf465257c", // RUB (RUB000UTSTOM)
+]);
+
+/** Реальная удерживаемая бумага (не кэш, не валюта). */
+export function isHeldSecurity(p: { instrumentType: string; quantity: number; instrumentId: string }): boolean {
+  return p.quantity > 0 && p.instrumentType !== "currency" && !CURRENCY_UIDS.has(p.instrumentId);
+}
+
 export interface Account {
   id: string;
   name: string;

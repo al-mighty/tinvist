@@ -2,6 +2,7 @@ import type { Config } from "../../config.js";
 import type { TradingBackend } from "../../backends/types.js";
 import { InstrumentResolver } from "../../instruments/resolve.js";
 import { MarketData, limitPriceFromBook, type OrderbookSnapshot } from "../../instruments/marketdata.js";
+import { isHeldSecurity } from "../../domain.js";
 import type { ProposalResult } from "../engine.js";
 import type { TradeProposal } from "../types.js";
 
@@ -49,11 +50,6 @@ export interface RsiParams {
   divMinYield: number; // мин. дивдоходность, %
   divSellAfterPayment: boolean; // true: держать через отсечку, продать после выплаты
 }
-
-/** Известные валютные UID (кэш) — исключаем из «удерживаемых бумаг». */
-const CURRENCY_UIDS = new Set<string>([
-  "a92e2e25-a698-45cc-a781-167cf465257c", // RUB (RUB000UTSTOM)
-]);
 
 const DEFAULTS: RsiParams = {
   period: 14,
@@ -105,9 +101,7 @@ export class RsiStrategy {
 
       // Валюта/кэш: prod отдаёт валютную позицию без instrumentType, поэтому
       // исключаем и по типу, и по известным валютным UID.
-      const heldShares = portfolio.positions.filter(
-        (p) => p.quantity > 0 && p.instrumentType !== "currency" && !CURRENCY_UIDS.has(p.instrumentId),
-      );
+      const heldShares = portfolio.positions.filter(isHeldSecurity);
       const heldUids = new Set(heldShares.map((p) => p.instrumentId));
 
       // ── ВЫХОДЫ: управляем открытыми позициями (RSI≥70 / тейк / стоп) ──

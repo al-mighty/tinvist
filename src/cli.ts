@@ -9,6 +9,7 @@ import { Executor } from "./execution/executor.js";
 import { ProposalEngine } from "./strategy/engine.js";
 import { runRsiCycle } from "./strategy/run.js";
 import { runLoop } from "./scheduler.js";
+import { buildStatusReport } from "./report/status.js";
 import { describeProposal, type TradeProposal } from "./strategy/types.js";
 
 /**
@@ -65,6 +66,18 @@ const backendCommands: Record<string, BackendCommand> = {
       }
     }
     console.log();
+  },
+
+  // status [accountId] — сводка: капитал, позиции, нереализ. P&L, просадка.
+  status: async (backend, cfg, args) => {
+    const accountId = args[0] ?? (await backend.listAccounts())[0]?.id ?? "";
+    if (!accountId) {
+      console.error("Не удалось определить accountId.");
+      process.exitCode = 1;
+      return;
+    }
+    const report = await buildStatusReport(cfg, backend, accountId);
+    console.log("\n" + report + "\n");
   },
 
   quote: async (backend, _cfg, args) => {
@@ -322,6 +335,7 @@ tinvist — торговый агент поверх T-Bank Invest MCP
   accounts              Список счетов
   portfolio [accountId] Портфель (по умолчанию — первый счёт)
   quote <instrumentId>  Последняя цена инструмента
+  status [accountId]    Сводка: капитал, позиции, нереализ. P&L, просадка
   order <тикер|uid> <buy|sell> <лоты> [лимит] [accountId]
                         Заявка через конвейер guard → подтверждение → исполнение
   propose <тикеры,...> [accountId]

@@ -67,6 +67,37 @@ export class AuditLog {
     return sum;
   }
 
+  /** Счётчики отправленных сегодня заявок по сторонам + оборот. */
+  async tradesToday(): Promise<{ buys: number; sells: number; turnoverRub: number }> {
+    let raw: string;
+    try {
+      raw = await readFile(this.filePath, "utf8");
+    } catch {
+      return { buys: 0, sells: 0, turnoverRub: 0 };
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    let buys = 0;
+    let sells = 0;
+    let turnoverRub = 0;
+    for (const line of raw.split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        const ev = JSON.parse(line) as AuditEvent;
+        if (ev.type !== "execute" || !ev.at.startsWith(today)) continue;
+        const p = ev.payload as { sent?: boolean; dedupKey?: string; notionalRub?: number };
+        if (!p?.sent) continue;
+        // dedupKey = accountId:instrument:side:lots
+        const side = p.dedupKey?.split(":")[2];
+        if (side === "buy") buys++;
+        else if (side === "sell") sells++;
+        if (typeof p.notionalRub === "number") turnoverRub += p.notionalRub;
+      } catch {
+        // битую строку пропускаем
+      }
+    }
+    return { buys, sells, turnoverRub };
+  }
+
   /**
    * Была ли идентичная заявка (тот же dedupKey) отправлена за последние
    * `windowSec` секунд. Идемпотентность на уровне приложения — защита от

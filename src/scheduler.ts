@@ -1,6 +1,8 @@
 import type { Config } from "./config.js";
 import type { TradingBackend } from "./backends/types.js";
 import { runRsiCycle } from "./strategy/run.js";
+import { buildStatusReport } from "./report/status.js";
+import { sendTelegram, reportSentFor, markReportSent } from "./report/notify.js";
 
 /**
  * Встроенный планировщик: периодически гоняет стратегию, чтобы входы/выходы,
@@ -46,6 +48,15 @@ export async function runLoop(
       }
     }
 
+    // Ежедневная сводка в Telegram (раз в день после REPORT_HOUR_MSK).
+    if (cfg.DAILY_REPORT_ENABLED) {
+      try {
+        await maybeSendDailyReport(cfg, backend, accountId, now);
+      } catch (err) {
+        console.error(`[${ts}] ошибка сводки: ${err instanceof Error ? err.message : err}`);
+      }
+    }
+
     if (cfg.LOOP_MAX_TICKS > 0 && tick >= cfg.LOOP_MAX_TICKS) {
       console.log(`Достигнут лимит тиков (${cfg.LOOP_MAX_TICKS}) — выход.`);
       break;
@@ -57,6 +68,23 @@ export async function runLoop(
     console.log(`Следующий тик через ${Math.round(sleepMs / 1000)}с (базовый ${cfg.LOOP_INTERVAL_SEC} + джиттер ${Math.round(jitterMs / 1000)}).`);
     await interruptibleSleep(sleepMs, () => stop);
   }
+}
+
+/** Отправляет ежедневную сводку один раз в день после REPORT_HOUR_MSK. */
+async function maybeSendDailyReport(
+  cfg: Config,
+  backend: TradingBackend,
+  accountId: string,
+  now: Date,
+): Promise<void> {
+  const msk = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+  const date = msk.toISOString().slice(0, 10);
+  if (msk.getUTCHours() < cfg.REPORT_HOUR_MSK) return;
+  if (await reportSentFor(date)) return;
+  const report = await buildStatusReport(cfg, backend, accountId);
+  await sendTelegram(cfg, `🗓 Ежедневная сводка\n\n${report}`);
+  await markReportSent(date);
+  console.log(`Ежедневная сводка отправлена (${date}).`);
 }
 
 /** Открыта ли биржа: будни и час в окне [start, end) по МСК (UTC+3). */
