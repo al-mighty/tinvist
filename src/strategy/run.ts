@@ -17,6 +17,7 @@ export async function runRsiCycle(
   watchlist: string[],
 ): Promise<void> {
   const strategy = new RsiStrategy(cfg, backend, {
+    strategyEnabled: cfg.STRATEGY_ENABLED,
     period: cfg.RSI_PERIOD,
     oversold: cfg.RSI_OVERSOLD,
     overbought: cfg.RSI_OVERBOUGHT,

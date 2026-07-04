@@ -52,6 +52,7 @@ const EnvSchema = z.object({
   MAX_OPEN_POSITIONS: z.coerce.number().int().default(3), // макс. число открытых позиций (0 = выкл)
 
   // Стратегия RSI mean-reversion (пороги настраиваемы)
+  STRATEGY_ENABLED: bool(true), // false → режим «только карри»: без новых входов (выходы и карри работают)
   RSI_PERIOD: z.coerce.number().int().positive().default(14),
   RSI_OVERSOLD: z.coerce.number().default(30),
   RSI_OVERBOUGHT: z.coerce.number().default(70),

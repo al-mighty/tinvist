@@ -39,6 +39,7 @@ export function computeRSI(closes: number[], period = 14): number | null {
 }
 
 export interface RsiParams {
+  strategyEnabled: boolean; // false → без новых входов (только выходы + карри)
   period: number;
   oversold: number; // RSI ниже → перепроданность → покупка
   overbought: number; // RSI выше → перекупленность → продажа
@@ -52,6 +53,7 @@ export interface RsiParams {
 }
 
 const DEFAULTS: RsiParams = {
+  strategyEnabled: true,
   period: 14,
   oversold: 30,
   overbought: 70,
@@ -180,7 +182,10 @@ export class RsiStrategy {
       }
 
       // ── ВХОДЫ: дивидендный фактор ИЛИ RSI≤30, если позиции ещё нет ──
-      for (const query of watchlist) {
+      // Режим «только карри» (STRATEGY_ENABLED=false): новых входов нет,
+      // но выходы выше и карри ниже продолжают работать.
+      if (!this.p.strategyEnabled) notes.push("режим «только карри»: спекулятивные входы отключены");
+      for (const query of this.p.strategyEnabled ? watchlist : []) {
         const info = await resolver.resolveOne(query);
         if (!info) {
           notes.push(`${query}: не найден`);
