@@ -97,6 +97,23 @@ export class Executor {
       });
       await this.audit.record("execute", { sent: true, mode: reason, notionalRub: notional, dedupKey, idempotencyKey });
       await this.audit.record("result", { order });
+      // Реализованный P&L при закрытии позиции (продаже): (выход − вход)×кол-во
+      // за вычетом комиссий обеих сторон (round-trip). Вход знает стратегия.
+      if (proposal.side === "sell" && typeof proposal.entryPrice === "number" && proposal.entryPrice > 0) {
+        const qty = proposal.lots * (proposal.lotSize ?? 1);
+        const exit = proposal.price;
+        const entry = proposal.entryPrice;
+        const commission = (exit + entry) * qty * (this.cfg.COMMISSION_PCT / 100);
+        const realizedRub = (exit - entry) * qty - commission;
+        await this.audit.record("realized", {
+          instrument: proposal.instrument,
+          entry,
+          exit,
+          qty,
+          commissionRub: commission,
+          realizedRub,
+        });
+      }
       return { status: "executed", message: `Отправлено (${reason}): ${order.status}`, order };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

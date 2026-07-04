@@ -50,8 +50,13 @@ export async function buildStatusReport(
     const { peak, drawdownPct } = await new EquityState().observe(accountId, p.totalValueRub);
     lines.push(`Пик капитала: ${fmtRub(peak)}  |  просадка: ${drawdownPct.toFixed(1)}%`);
 
-    const t = await new AuditLog().tradesToday();
+    const audit = new AuditLog();
+    const t = await audit.tradesToday();
     lines.push(`Сегодня сделок: ${t.buys} покупок, ${t.sells} продаж (оборот ${fmtRub(t.turnoverRub)})`);
+    const rp = await audit.realizedPnl();
+    const rs = rp.today >= 0 ? "+" : "";
+    const rt = rp.total >= 0 ? "+" : "";
+    lines.push(`Реализ. P&L: сегодня ${rs}${rp.today.toFixed(2)}₽, всего ${rt}${rp.total.toFixed(2)}₽`);
   } finally {
     await resolver.close();
   }

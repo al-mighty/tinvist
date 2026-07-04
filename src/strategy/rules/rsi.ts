@@ -170,6 +170,7 @@ export class RsiStrategy {
             orderType: exec.orderType,
             lots,
             price: exec.price,
+            entryPrice: pos.avgPrice,
             timeInForce: exec.timeInForce,
             lotSize: info.lot,
             confidence: 0.8,

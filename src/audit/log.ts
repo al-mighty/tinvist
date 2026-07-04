@@ -16,6 +16,7 @@ export type AuditEventType =
   | "approval" // решение человека (approve/reject)
   | "execute" // отправка заявки брокеру (или DRY_RUN)
   | "result" // ответ брокера
+  | "realized" // реализованный P&L по закрытию позиции (продаже)
   | "error";
 
 export interface AuditEvent {
@@ -96,6 +97,36 @@ export class AuditLog {
       }
     }
     return { buys, sells, turnoverRub };
+  }
+
+  /**
+   * Реализованный P&L по закрытым позициям (события "realized"): сегодня и
+   * всего. Считается по нашим продажам (стратегия знает цену входа).
+   */
+  async realizedPnl(): Promise<{ today: number; total: number }> {
+    let raw: string;
+    try {
+      raw = await readFile(this.filePath, "utf8");
+    } catch {
+      return { today: 0, total: 0 };
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    let todaySum = 0;
+    let total = 0;
+    for (const line of raw.split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        const ev = JSON.parse(line) as AuditEvent;
+        if (ev.type !== "realized") continue;
+        const p = ev.payload as { realizedRub?: number };
+        if (typeof p?.realizedRub !== "number") continue;
+        total += p.realizedRub;
+        if (ev.at.startsWith(today)) todaySum += p.realizedRub;
+      } catch {
+        // битую строку пропускаем
+      }
+    }
+    return { today: todaySum, total };
   }
 
   /**
