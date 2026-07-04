@@ -10,6 +10,7 @@ import { ProposalEngine } from "./strategy/engine.js";
 import { runRsiCycle } from "./strategy/run.js";
 import { runLoop } from "./scheduler.js";
 import { buildStatusReport } from "./report/status.js";
+import { runBacktest } from "./backtest/engine.js";
 import { describeProposal, type TradeProposal } from "./strategy/types.js";
 
 /**
@@ -66,6 +67,44 @@ const backendCommands: Record<string, BackendCommand> = {
       }
     }
     console.log();
+  },
+
+  // backtest <тикеры> [дней] — исторический бэктест RSI-стратегии (net комиссии).
+  backtest: async (_backend, cfg, args) => {
+    const watchRaw = args[0];
+    if (!watchRaw) {
+      console.error("Использование: npm run cli -- backtest <тикеры через запятую> [дней]");
+      process.exitCode = 1;
+      return;
+    }
+    const watchlist = watchRaw.split(",").map((s) => s.trim()).filter(Boolean);
+    const days = args[1] ? Math.max(30, Number(args[1])) : 365;
+    console.log(`\nБэктест RSI(${cfg.RSI_PERIOD}, ${cfg.RSI_OVERSOLD}/${cfg.RSI_OVERBOUGHT}, тейк ${cfg.RSI_TP_PCT}% / стоп ${cfg.RSI_SL_PCT}%), комиссия ${cfg.COMMISSION_PCT}%/сторона, ${days} дней. 1 лот/сделку.\n`);
+    const results = await runBacktest(cfg, watchlist, days);
+    let totNet = 0;
+    let totTrades = 0;
+    let totBH = 0;
+    for (const r of results) {
+      if (r.note) {
+        console.log(`${r.ticker}: ${r.note}`);
+        continue;
+      }
+      totNet += r.netPnlRub;
+      totTrades += r.trades;
+      totBH += r.buyHoldPnlRub;
+      const s = r.netPnlRub >= 0 ? "+" : "";
+      const bh = r.buyHoldPnlRub >= 0 ? "+" : "";
+      console.log(
+        `${r.ticker.padEnd(6)} сделок ${String(r.trades).padStart(3)} | winrate ${r.winRatePct.toFixed(0).padStart(3)}% | ` +
+          `net ${s}${r.netPnlRub.toFixed(1)}₽ (комиссия ${r.commissionRub.toFixed(1)}₽, maxDD ${r.maxDrawdownRub.toFixed(1)}₽) | ` +
+          `buy&hold ${bh}${r.buyHoldPnlRub.toFixed(1)}₽${r.openPosition ? " | (позиция открыта)" : ""}`,
+      );
+    }
+    const s = totNet >= 0 ? "+" : "";
+    const bh = totBH >= 0 ? "+" : "";
+    console.log(
+      `\nИТОГО: стратегия net ${s}${totNet.toFixed(1)}₽ (${totTrades} сделок) vs buy&hold ${bh}${totBH.toFixed(1)}₽\n`,
+    );
   },
 
   // status [accountId] — сводка: капитал, позиции, нереализ. P&L, просадка.
@@ -336,6 +375,7 @@ tinvist — торговый агент поверх T-Bank Invest MCP
   portfolio [accountId] Портфель (по умолчанию — первый счёт)
   quote <instrumentId>  Последняя цена инструмента
   status [accountId]    Сводка: капитал, позиции, нереализ. P&L, просадка
+  backtest <тикеры,...> [дней]  Исторический бэктест RSI-стратегии (net комиссии)
   order <тикер|uid> <buy|sell> <лоты> [лимит] [accountId]
                         Заявка через конвейер guard → подтверждение → исполнение
   propose <тикеры,...> [accountId]

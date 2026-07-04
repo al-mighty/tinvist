@@ -263,6 +263,42 @@ export class MarketData {
     return ((maxHigh - minLow) / last) * 100;
   }
 
+  /** Дневные OHLC за последние `days` дней (хронологически) — для бэктеста. */
+  async dailyOHLC(
+    instrumentId: string,
+    days = 365,
+  ): Promise<{ opens: number[]; highs: number[]; lows: number[]; closes: number[] } | null> {
+    await this.ensure();
+    const to = new Date();
+    const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+    const res = (await withRetry(
+      async () =>
+        extractResult(
+          await this.mcp.callTool("invest_get_candles", {
+            instrumentId,
+            interval: "CANDLE_INTERVAL_DAY",
+            from: from.toISOString(),
+            to: to.toISOString(),
+            limit: Math.min(days + 5, 2400),
+          }),
+        ),
+      { label: "invest_get_candles(day)" },
+    )) as any;
+    const candles = (res?.candles ?? []) as any[];
+    if (candles.length === 0) return null;
+    const opens: number[] = [];
+    const highs: number[] = [];
+    const lows: number[] = [];
+    const closes: number[] = [];
+    for (const c of candles) {
+      opens.push(parseMoney(c.open));
+      highs.push(parseMoney(c.high));
+      lows.push(parseMoney(c.low));
+      closes.push(parseMoney(c.close));
+    }
+    return { opens, highs, lows, closes };
+  }
+
   /** Дневные свечи за последние `days` дней. */
   async dailyCandles(instrumentId: string, days = 30): Promise<CandleSnapshot | null> {
     await this.ensure();
