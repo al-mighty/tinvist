@@ -181,6 +181,57 @@ export class MarketData {
     return best;
   }
 
+  /** Список облигаций, торгуемых через API: [{uid, name}]. */
+  async listBondsBase(): Promise<Array<{ uid: string; name: string }>> {
+    await this.ensure();
+    const res = (await withRetry(
+      async () =>
+        extractResult(await this.mcp.callTool("invest_list_bonds", { instrumentStatus: "INSTRUMENT_STATUS_BASE" })),
+      { label: "invest_list_bonds" },
+    )) as any;
+    const bonds = (res?.bonds ?? res?.instruments ?? []) as any[];
+    return bonds
+      .filter((b) => b?.uid && b?.name)
+      .map((b) => ({ uid: String(b.uid), name: String(b.name) }));
+  }
+
+  /** Детали облигации (номинал, НКД, погашение, лот, фикс/плавающий купон). */
+  async bondDetail(uid: string): Promise<{
+    uid: string;
+    ticker: string;
+    maturityDate: string;
+    nominalRub: number;
+    aciRub: number;
+    lot: number;
+    currency: string;
+    floating: boolean;
+  } | null> {
+    await this.ensure();
+    const res = (await withRetry(
+      async () =>
+        extractResult(
+          await this.mcp.callTool("invest_get_bond", {
+            idType: "INSTRUMENT_ID_TYPE_UID",
+            id: uid,
+            responseView: ["FULL"],
+          }),
+        ),
+      { label: "invest_get_bond" },
+    )) as any;
+    const b = res?.instrument ?? res;
+    if (!b?.ticker) return null;
+    return {
+      uid,
+      ticker: String(b.ticker),
+      maturityDate: String(b.maturityDate ?? ""),
+      nominalRub: parseMoney(b.nominal),
+      aciRub: parseMoney(b.aciValue),
+      lot: Number(b.lot ?? 1),
+      currency: String(b.currency ?? "rub"),
+      floating: b.floatingCouponFlag === true,
+    };
+  }
+
   /**
    * Торгуется ли инструмент прямо сейчас (нормальная сессия, включая торги
    * выходного дня / дилерскую сессию). Спрашиваем биржу — надёжнее хардкода часов.

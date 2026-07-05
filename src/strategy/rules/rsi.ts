@@ -2,7 +2,8 @@ import type { Config } from "../../config.js";
 import type { TradingBackend } from "../../backends/types.js";
 import { InstrumentResolver } from "../../instruments/resolve.js";
 import { MarketData, limitPriceFromBook, type OrderbookSnapshot } from "../../instruments/marketdata.js";
-import { isHeldSecurity } from "../../domain.js";
+import { isHeldSecurity, type Portfolio } from "../../domain.js";
+import { OfzLadder, carryUids } from "../../carry/ofz-ladder.js";
 import type { ProposalResult } from "../engine.js";
 import type { TradeProposal } from "../types.js";
 
@@ -103,9 +104,11 @@ export class RsiStrategy {
 
       // Валюта/кэш: prod отдаёт валютную позицию без instrumentType, поэтому
       // исключаем и по типу, и по известным валютным UID.
-      // Карри-фонд (LQDT) — не спекулятивная позиция, стратегией не сопровождается.
+      // Карри-инструменты (LQDT + ступени ОФЗ) — не спекулятивные позиции,
+      // стратегией не сопровождаются.
+      const carrySet = await carryUids(this.cfg);
       const heldShares = portfolio.positions.filter(
-        (p) => isHeldSecurity(p) && p.instrumentId !== this.cfg.CARRY_UID,
+        (p) => isHeldSecurity(p) && !carrySet.has(p.instrumentId),
       );
       const heldUids = new Set(heldShares.map((p) => p.instrumentId));
 
@@ -280,30 +283,41 @@ export class RsiStrategy {
         });
       }
 
-      // ── КАРРИ: паркуем избыточный кэш (сверх резерва) в фонд ликвидности ──
-      if (this.cfg.CARRY_ENABLED && (await market.isTradeable(this.cfg.CARRY_UID).catch(() => false))) {
+      // ── КАРРИ: паркуем избыточный кэш (сверх резерва) ──
+      if (this.cfg.CARRY_ENABLED) {
         const excess = cashLeft - this.cfg.CASH_RESERVE_RUB;
-        const book = await market.orderbook(this.cfg.CARRY_UID).catch(() => null);
-        const price = book ? book.bestAsk : await this.backend.getLastPrice(this.cfg.CARRY_UID).catch(() => 0);
-        if (price > 0 && excess >= price) {
-          const lots = Math.floor(excess / price); // лот фонда = 1
-          const exec = this.orderExec("buy", book, price);
-          proposals.push({
-            instrument: this.cfg.CARRY_UID,
-            instrumentName: `${this.cfg.CARRY_TICKER} · фонд ликвидности`,
-            side: "buy",
-            orderType: exec.orderType,
-            lots,
-            price: exec.price,
-            timeInForce: exec.timeInForce,
-            lotSize: 1,
-            kind: "carry",
-            confidence: 1,
-            rationale: `Парковка кэша: ${lots} лот ${this.cfg.CARRY_TICKER} ≈ ${(lots * price).toFixed(0)}₽ (ежедневный карри по ставке).`,
-            createdAt: now,
-          });
-        } else if (excess > 0) {
-          notes.push(`карри: избыток ${excess.toFixed(0)}₽ < цены лота ${this.cfg.CARRY_TICKER}`);
+        if (excess <= 0) {
+          // нечего парковать
+        } else if (this.cfg.CARRY_MODE === "ofz") {
+          const p = await this.carryOfz(market, portfolio, excess);
+          if (p) proposals.push(p);
+          else notes.push("карри-ОФЗ: не хватает на лот или лестница пуста");
+        } else {
+          // Фонд ликвидности (LQDT): мгновенная ликвидность.
+          if (await market.isTradeable(this.cfg.CARRY_UID).catch(() => false)) {
+            const book = await market.orderbook(this.cfg.CARRY_UID).catch(() => null);
+            const price = book ? book.bestAsk : await this.backend.getLastPrice(this.cfg.CARRY_UID).catch(() => 0);
+            if (price > 0 && excess >= price) {
+              const lots = Math.floor(excess / price); // лот фонда = 1
+              const exec = this.orderExec("buy", book, price);
+              proposals.push({
+                instrument: this.cfg.CARRY_UID,
+                instrumentName: `${this.cfg.CARRY_TICKER} · фонд ликвидности`,
+                side: "buy",
+                orderType: exec.orderType,
+                lots,
+                price: exec.price,
+                timeInForce: exec.timeInForce,
+                lotSize: 1,
+                kind: "carry",
+                confidence: 1,
+                rationale: `Парковка кэша: ${lots} лот ${this.cfg.CARRY_TICKER} ≈ ${(lots * price).toFixed(0)}₽ (ежедневный карри по ставке).`,
+                createdAt: now,
+              });
+            } else {
+              notes.push(`карри: избыток ${excess.toFixed(0)}₽ < цены лота ${this.cfg.CARRY_TICKER}`);
+            }
+          }
         }
       }
     } finally {
@@ -336,6 +350,53 @@ export class RsiStrategy {
       return { orderType: "limit", price, timeInForce: "fak" };
     }
     return { orderType: "market", price: refPrice };
+  }
+
+  /**
+   * Карри через лестницу ОФЗ: докупаем самую недовесную ступень на избыток кэша.
+   * Цена лимитки — в пунктах (% номинала); стоимость лота = номинал×цена/100 + НКД.
+   */
+  private async carryOfz(
+    market: MarketData,
+    portfolio: Portfolio,
+    excess: number,
+  ): Promise<TradeProposal | null> {
+    const ladder = new OfzLadder(this.cfg, market);
+    const rungs = await ladder.ensureLadder(Date.now()).catch(() => [] as never[]);
+    if (!rungs.length) return null;
+
+    const heldLots = new Map<string, number>();
+    for (const pos of portfolio.positions) heldLots.set(pos.instrumentId, pos.quantity);
+    const rung = ladder.selectUnderweightRung(rungs, heldLots);
+
+    if (!(await market.isTradeable(rung.uid).catch(() => false))) return null;
+    const detail = await market.bondDetail(rung.uid).catch(() => null);
+    if (!detail) return null;
+    const book = await market.orderbook(rung.uid).catch(() => null);
+    const askPoints = book ? book.bestAsk : await this.backend.getLastPrice(rung.uid).catch(() => 0);
+    if (!(askPoints > 0)) return null;
+
+    // Полная цена покупки за лот, руб: номинал×цена(пункты)/100 + НКД, ×лотность.
+    const costPerLot = detail.lot * (detail.nominalRub * (askPoints / 100) + detail.aciRub);
+    if (!(costPerLot > 0) || excess < costPerLot) return null;
+    const lots = Math.floor(excess / costPerLot);
+    if (lots < 1) return null;
+
+    const exec = this.orderExec("buy", book, askPoints);
+    return {
+      instrument: rung.uid,
+      instrumentName: `${detail.ticker} · ОФЗ (лестница)`,
+      side: "buy",
+      orderType: exec.orderType,
+      lots,
+      price: exec.price, // в пунктах (% номинала)
+      timeInForce: exec.timeInForce,
+      lotSize: detail.lot,
+      kind: "carry",
+      confidence: 1,
+      rationale: `Лестница ОФЗ: ${lots}×${detail.ticker} ≈ ${(lots * costPerLot).toFixed(0)}₽ (погашение ${detail.maturityDate.slice(0, 10)}, фикс-купон).`,
+      createdAt: new Date().toISOString(),
+    };
   }
 
   /** Чем дальше RSI за порог, тем выше уверенность (0.5..0.9). */

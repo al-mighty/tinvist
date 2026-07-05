@@ -68,11 +68,15 @@ const EnvSchema = z.object({
   VOLATILITY_ENABLED: bool(true),
   MAX_INTRADAY_RANGE_PCT: z.coerce.number().default(3), // размах за час выше → стоп входов
 
-  // Карри: парковка свободного кэша в фонд ликвидности (ежедневный доход)
+  // Карри: парковка свободного кэша (ежедневный доход)
   CARRY_ENABLED: bool(true),
+  // Режим: fund — фонд ликвидности LQDT (мгновенная ликвидность); ofz — лестница ОФЗ
+  // (фикс-купон ОФЗ-ПД по срокам погашения; фиксируем доходность кривой).
+  CARRY_MODE: z.enum(["fund", "ofz"]).default("fund"),
   CARRY_UID: z.string().default("a240edc6-a605-44b3-9801-37b9f7c3d1ff"), // LQDT «ВИМ Ликвидность»
   CARRY_TICKER: z.string().default("LQDT"),
-  CASH_RESERVE_RUB: z.coerce.number().default(2000), // держим ликвидным под стратегию, остальное — в фонд
+  OFZ_LADDER_RUNGS: z.coerce.number().int().positive().default(4), // число ступеней лестницы
+  CASH_RESERVE_RUB: z.coerce.number().default(2000), // держим ликвидным под стратегию, остальное — в карри
 
   // Дивидендный фактор стратегии
   DIV_ENABLED: bool(true),

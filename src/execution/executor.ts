@@ -6,6 +6,7 @@ import { AuditLog } from "../audit/log.js";
 import { checkGuards, type PortfolioContext } from "../safety/guards.js";
 import { EquityState } from "../safety/equity-state.js";
 import { CURRENCY_UIDS } from "../domain.js";
+import { carryUids } from "../carry/ofz-ladder.js";
 import {
   estimatedNotional,
   describeProposal,
@@ -134,9 +135,11 @@ export class Executor {
     try {
       const portfolio = await this.backend.getPortfolio(accountId);
       totalValueRub = portfolio.totalValueRub;
-      // Фонд ликвидности (карри) = cash-equivalent, не считаем риск-экспозицией.
-      const carryPos = portfolio.positions.find((p) => p.instrumentId === this.cfg.CARRY_UID);
-      const carryValue = carryPos ? carryPos.valueRub : 0;
+      // Карри (LQDT + ступени ОФЗ) = cash-equivalent, не считаем риск-экспозицией.
+      const carrySet = await carryUids(this.cfg);
+      const carryValue = portfolio.positions
+        .filter((p) => carrySet.has(p.instrumentId))
+        .reduce((s, p) => s + p.valueRub, 0);
       // Инвестировано (риск) = всё минус кэш минус карри.
       investedRub = Math.max(0, totalValueRub - portfolio.cashRub - carryValue);
       // Реальные риск-позиции — не валюта, не карри.
@@ -144,7 +147,7 @@ export class Executor {
         (p) =>
           p.instrumentType !== "currency" &&
           p.quantity > 0 &&
-          p.instrumentId !== this.cfg.CARRY_UID &&
+          !carrySet.has(p.instrumentId) &&
           !CURRENCY_UIDS.has(p.instrumentId),
       );
       openPositions = nonCash.length;
