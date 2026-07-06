@@ -382,16 +382,17 @@ export class RsiStrategy {
     const lots = Math.floor(excess / costPerLot);
     if (lots < 1) return null;
 
-    const exec = this.orderExec("buy", book, askPoints);
+    // Облигации паркуем РЫНОЧНОЙ заявкой: лимит из стакана может упереться в
+    // ценовой коридор/тик и быть отклонён биржей. Спред ОФЗ узкий, коридор
+    // (limitUp/Down) контролирует биржа — проскальзывание ограничено.
     return {
       instrument: rung.uid,
       instrumentName: `${detail.ticker} · ОФЗ (лестница)`,
       side: "buy",
-      orderType: exec.orderType,
+      orderType: "market",
       lots,
-      price: exec.price, // в пунктах (% номинала)
+      price: askPoints, // справочно (пункты); для market не отправляется
       notionalRub: lots * costPerLot, // реальная сумма в рублях (номинал×пункты/100 + НКД)
-      timeInForce: exec.timeInForce,
       lotSize: detail.lot,
       kind: "carry",
       confidence: 1,
