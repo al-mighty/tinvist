@@ -109,6 +109,7 @@ const EnvSchema = z.object({
 
   // Подтверждение
   APPROVAL_CHANNEL: z.enum(["cli", "telegram"]).default("telegram"),
+  APPROVAL_TIMEOUT_SEC: z.coerce.number().int().positive().default(1800), // сколько ждать ✅/❌ (30 мин)
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_APPROVER_CHAT_ID: z.string().optional(),
 });

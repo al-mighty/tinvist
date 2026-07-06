@@ -38,7 +38,7 @@ export class TelegramController implements Approver {
     private readonly cfg: Config,
     /** Строит текст сводки/статуса по запросу. */
     private readonly statusFn: () => Promise<string>,
-    private readonly approvalTimeoutMs = 300_000,
+    private readonly approvalTimeoutMs = cfg.APPROVAL_TIMEOUT_SEC * 1000,
   ) {
     if (!cfg.TELEGRAM_BOT_TOKEN || !cfg.TELEGRAM_APPROVER_CHAT_ID) {
       throw new Error("Telegram-пульт требует TELEGRAM_BOT_TOKEN и TELEGRAM_APPROVER_CHAT_ID");

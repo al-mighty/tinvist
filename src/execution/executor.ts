@@ -37,7 +37,8 @@ export class Executor {
   ) {}
 
   async execute(proposal: TradeProposal, accountId: string): Promise<ExecutionOutcome> {
-    const notional = estimatedNotional(proposal);
+    // Для облигаций (цена в пунктах) берём точную рублёвую сумму из proposal.
+    const notional = proposal.notionalRub ?? estimatedNotional(proposal);
     await this.audit.record("proposal", { proposal, accountId, backend: this.backend.kind });
 
     // 1. Контекст портфеля для долевых лимитов.

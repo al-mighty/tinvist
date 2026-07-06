@@ -390,6 +390,7 @@ export class RsiStrategy {
       orderType: exec.orderType,
       lots,
       price: exec.price, // в пунктах (% номинала)
+      notionalRub: lots * costPerLot, // реальная сумма в рублях (номинал×пункты/100 + НКД)
       timeInForce: exec.timeInForce,
       lotSize: detail.lot,
       kind: "carry",
