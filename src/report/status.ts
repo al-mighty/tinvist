@@ -6,6 +6,7 @@ import { AuditLog } from "../audit/log.js";
 import { EquityState } from "../safety/equity-state.js";
 import { EquityHistory } from "../analytics/equity-history.js";
 import { computePerformance, formatPerformance } from "../analytics/performance.js";
+import { carryUids } from "../carry/ofz-ladder.js";
 import { fmtRub, isHeldSecurity } from "../domain.js";
 
 /**
@@ -26,27 +27,41 @@ export async function buildStatusReport(
     lines.push(`Капитал: ${fmtRub(p.totalValueRub)}  |  кэш: ${fmtRub(p.cashRub)}`);
 
     const held = p.positions.filter(isHeldSecurity);
+    const carrySet = await carryUids(cfg);
     let totalUnreal = 0;
     if (held.length === 0) {
       lines.push("Позиций нет.");
     } else {
       lines.push("Позиции:");
       for (const pos of held) {
-        const info = await resolver.byUid(pos.instrumentId).catch(() => null);
-        const ticker =
-          pos.instrumentId === cfg.CARRY_UID
-            ? `${cfg.CARRY_TICKER} (карри)`
-            : info?.ticker || pos.ticker || pos.instrumentId.slice(0, 8);
-        // getLastPrice может вернуть 0 при закрытом рынке — тогда берём среднюю
-        // цену входа (позиция «флэт»), иначе получим ложные −100%.
-        const rawLast = await backend.getLastPrice(pos.instrumentId).catch(() => 0);
-        const last = rawLast > 0 ? rawLast : pos.avgPrice;
+        // Карри-облигация (ступень ОФЗ): avgPrice в рублях, а getLastPrice —
+        // в пунктах (% номинала). Переводим последнюю цену в рубли.
+        const isCarryBond = carrySet.has(pos.instrumentId) && pos.instrumentId !== cfg.CARRY_UID;
+        let ticker: string;
+        let last: number;
+        if (isCarryBond) {
+          const bd = await market.bondDetail(pos.instrumentId).catch(() => null);
+          ticker = bd?.ticker ? `${bd.ticker} · ОФЗ (карри)` : pos.instrumentId.slice(0, 8);
+          const pts = await backend.getLastPrice(pos.instrumentId).catch(() => 0);
+          const nominal = bd?.nominalRub || 1000;
+          last = pts > 0 ? (pts * nominal) / 100 : pos.avgPrice; // пункты → рубли
+        } else {
+          const info = await resolver.byUid(pos.instrumentId).catch(() => null);
+          ticker =
+            pos.instrumentId === cfg.CARRY_UID
+              ? `${cfg.CARRY_TICKER} (карри)`
+              : info?.ticker || pos.ticker || pos.instrumentId.slice(0, 8);
+          // getLastPrice может вернуть 0 при закрытом рынке — берём среднюю цену
+          // входа (позиция «флэт»), иначе ложные −100%.
+          const rawLast = await backend.getLastPrice(pos.instrumentId).catch(() => 0);
+          last = rawLast > 0 ? rawLast : pos.avgPrice;
+        }
         const unreal = (last - pos.avgPrice) * pos.quantity;
         const unrealPct = pos.avgPrice > 0 ? (last / pos.avgPrice - 1) * 100 : 0;
         totalUnreal += unreal;
         const sign = unreal >= 0 ? "+" : "";
         lines.push(
-          `• ${ticker}: ${pos.quantity} шт, вход ${pos.avgPrice}, тек ${last} → ${sign}${unreal.toFixed(2)}₽ (${sign}${unrealPct.toFixed(2)}%)`,
+          `• ${ticker}: ${pos.quantity} шт, вход ${pos.avgPrice.toFixed(2)}, тек ${last.toFixed(2)} → ${sign}${unreal.toFixed(2)}₽ (${sign}${unrealPct.toFixed(2)}%)`,
         );
       }
       const sign = totalUnreal >= 0 ? "+" : "";
