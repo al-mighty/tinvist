@@ -256,6 +256,15 @@ export class RsiStrategy {
           confidence = this.confidence(rsi, "buy");
         }
 
+        // Порог уверенности: малоуверенные (едва зашедшие за порог) входы не
+        // предлагаем — не тревожим по слабым сигналам.
+        if (confidence < this.cfg.MIN_CONFIDENCE) {
+          notes.push(
+            `${info.ticker}: уверенность ${(confidence * 100).toFixed(0)}% < порога ${(this.cfg.MIN_CONFIDENCE * 100).toFixed(0)}% — пропуск`,
+          );
+          continue;
+        }
+
         const exec = this.orderExec("buy", book, book.mid);
         const notional = exec.price * info.lot;
         if (notional > this.cfg.MAX_ORDER_RUB) {

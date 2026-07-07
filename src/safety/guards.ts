@@ -131,6 +131,9 @@ export function checkGuards(
   if (proposal.orderType === "market") {
     warnings.push("Рыночная заявка: реальная цена исполнения может отличаться от оценочной.");
   }
+  if (proposal.confidence != null && proposal.confidence < 0.5) {
+    warnings.push(`Низкая уверенность сигнала: ${(proposal.confidence * 100).toFixed(0)}%.`);
+  }
 
   return { ok: violations.length === 0, violations, warnings };
 }

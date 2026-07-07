@@ -52,15 +52,14 @@ export function estimatedNotional(p: TradeProposal): number {
 export function describeProposal(p: TradeProposal): string {
   const sideRu = p.side === "buy" ? "ПОКУПКА" : "ПРОДАЖА";
   const name = p.instrumentName ? `${p.instrumentName} (${p.instrument})` : p.instrument;
-  // «Уверенность» намеренно не показываем: это не калиброванная вероятность, а
-  // эвристика «насколько RSI за порогом» — при edge≈0 это ложная точность.
+  const conf = p.confidence != null ? ` · уверенность ${(p.confidence * 100).toFixed(0)}%` : "";
   // Облигация: цена в пунктах (% номинала), сумма — в рублях (notionalRub).
   if (p.notionalRub != null) {
     const rub = p.notionalRub.toLocaleString("ru-RU", { maximumFractionDigits: 0 });
     const typeRu = p.orderType === "market" ? "по рынку" : `лимит ${p.price} пт`;
-    return `${sideRu} ${name}: ${p.lots} лот. ${typeRu} ≈ ${rub} ₽`;
+    return `${sideRu} ${name}: ${p.lots} лот. ${typeRu} ≈ ${rub} ₽${conf}`;
   }
   const notional = estimatedNotional(p).toLocaleString("ru-RU", { maximumFractionDigits: 2 });
   const typeRu = p.orderType === "market" ? "по рынку" : `лимит ${p.price} ₽`;
-  return `${sideRu} ${name}: ${p.lots} лот. ${typeRu} ≈ ${notional} ₽`;
+  return `${sideRu} ${name}: ${p.lots} лот. ${typeRu} ≈ ${notional} ₽${conf}`;
 }
